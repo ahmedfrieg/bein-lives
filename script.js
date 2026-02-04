@@ -593,32 +593,38 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
 
     // --- LOGIC: VIDEO HANDLER ---
 
-    // 0. Facebook Handler (Ultimate Robust Mode - Final)
+    // 0. Facebook Handler (Resilient Version)
     if (srcUrl.includes('facebook.com') || srcUrl.includes('fb.watch') || srcUrl.includes('fb.com')) {
-        let videoId = null;
+        let videoUrl = srcUrl;
 
-        // 1. Aggressive ID Extraction: We search for the first string of 10+ digits
-        const idMatches = srcUrl.match(/(?:videos\/|reel\/|watch\/\?v=|v=|fbid=|watch\/|v\/)(\d{10,})/) || srcUrl.match(/\/(\d{10,})(?:\/|\?|$)/);
+        try {
+            // If it's already a plugin URL, extract the actual video link
+            if (videoUrl.includes('plugins/video.php')) {
+                const searchParams = new URLSearchParams(videoUrl.split('?')[1] || '');
+                const href = searchParams.get('href');
+                if (href) videoUrl = decodeURIComponent(href);
+            }
 
-        if (idMatches && idMatches[1]) {
-            videoId = idMatches[1];
+            // Extract the numeric ID - the most stable way to embed
+            // We search for a sequence of 10+ digits which is standard for FB videos
+            const idMatch = videoUrl.match(/(?:videos\/|reel\/|watch\/|v=|fbid=|\/v\/|watch\/\?v=)(\d{10,})/) || videoUrl.match(/\/(\d{10,})(\/|\?|$)/);
+
+            if (idMatch && idMatch[1]) {
+                videoUrl = `https://www.facebook.com/video.php?v=${idMatch[1]}`;
+            }
+        } catch (e) {
+            console.error("FB URL Parsing error:", e);
+            // Fallback to the original srcUrl if parsing fails
         }
 
-        // 2. Clear Rebuild
-        let finalHref = srcUrl;
-        if (videoId) {
-            finalHref = `https://www.facebook.com/watch/?v=${videoId}`;
-        }
-
-        const encodedHref = encodeURIComponent(finalHref);
-
+        const encoded = encodeURIComponent(videoUrl);
         container.classList.add('iframe-mode');
         container.innerHTML = `
             <iframe 
-                src="https://www.facebook.com/plugins/video.php?href=${encodedHref}&show_text=0&t=0&adapt_container_width=true"
+                src="https://www.facebook.com/plugins/video.php?href=${encoded}&show_text=0&t=0&adapt_container_width=true"
                 width="100%" 
                 height="100%" 
-                style="border:none; overflow:hidden; min-height:500px;" 
+                style="border:none;overflow:hidden;min-height:500px;" 
                 scrolling="no" 
                 frameborder="0" 
                 allowfullscreen="true" 
