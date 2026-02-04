@@ -154,23 +154,35 @@ function renderAdminList(filterQuery = "") {
 
                 const safeId = String(link.id);
                 div.innerHTML = `
-                    <div class="admin-item-grid" style="grid-template-columns: 1fr 1fr 1fr;">
-                        <input type="text" id="edit-name-${safeId}" value="${link.name}" class="form-control" placeholder="اسم القناة">
-                        <input type="text" id="edit-sub-${safeId}" value="${link.subtitleUrl || ''}" class="form-control" placeholder="رابط ملف الترجمة (Subtitle URL)">
-                        <select id="edit-cat-${safeId}" class="form-control admin-cat-select">
-                            ${orderedCats.map(c => `<option value="${c}" ${c === cat ? 'selected' : ''}>${c}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="admin-item-actions">
-                        <label class="admin-protection-row">
-                            <input type="checkbox" id="edit-protection-${safeId}" ${link.forceProtection ? 'checked' : ''}> تفعيل نظام الحماية
-                        </label>
-                        <label class="admin-protection-row" style="color:var(--secondary-color);">
-                            <input type="checkbox" id="edit-audio-${safeId}" ${link.forceAudio ? 'checked' : ''}> مشغل موسيقي فاخر
-                        </label>
-                        <div class="admin-btn-grid">
-                            <button class="btn btn-primary btn-save-full" onclick="window.updateChannelInfo('${safeId}')">💾 حفظ</button>
-                            <button class="btn btn-danger btn-delete-full" onclick="window.deleteChannel('${safeId}')">🗑️ حذف</button>
+                    <div class="admin-edit-row">
+                        <div class="admin-inputs-group">
+                            <div class="input-field">
+                                <label>اسم القناة</label>
+                                <input type="text" id="edit-name-${safeId}" value="${link.name}" class="form-control">
+                            </div>
+                            <div class="input-field">
+                                <label>القسم</label>
+                                <select id="edit-cat-${safeId}" class="form-control">
+                                    ${orderedCats.map(c => `<option value="${c}" ${c === cat ? 'selected' : ''}>${c}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="input-field">
+                                <label>رابط الفيديو/كود التضمين</label>
+                                <input type="text" id="edit-url-${safeId}" value="${link.url || ''}" class="form-control">
+                            </div>
+                        </div>
+                        
+                        <div class="admin-actions-vertical">
+                            <label class="admin-check-label">
+                                <input type="checkbox" id="edit-protection-${safeId}" ${link.forceProtection ? 'checked' : ''}> 🛡️ نظام الحماية
+                            </label>
+                            <label class="admin-check-label" style="color:var(--secondary-color);">
+                                <input type="checkbox" id="edit-audio-${safeId}" ${link.forceAudio ? 'checked' : ''}> 🎵 مشغل موسيقي
+                            </label>
+                            <div class="admin-btn-stack">
+                                <button class="btn btn-primary btn-save" onclick="window.updateChannelInfo('${safeId}')">💾 حفظ التعديلات</button>
+                                <button class="btn btn-danger btn-delete" onclick="window.deleteChannel('${safeId}')">🗑️ حذف القناة</button>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -214,18 +226,21 @@ function initApp() {
     firebase.initializeApp(firebaseConfig);
     db = firebase.database();
 
+    let linksData = [];
+    let channelsNodeData = [];
+
     db.ref('links').on('value', snap => {
         const data = snap.val();
-        channelsData = data ? Object.keys(data).map(k => ({ id: k, ...data[k] })) : [];
+        linksData = data ? Object.keys(data).map(k => ({ id: k, ...data[k], _node: 'links' })) : [];
+        channelsData = [...linksData, ...channelsNodeData];
         requestAnimationFrame(refreshUI);
     });
+
     db.ref('channels').on('value', snap => {
         const data = snap.val();
-        if (data) {
-            const formatted = Object.keys(data).map(k => ({ id: k, ...data[k] }));
-            channelsData = [...channelsData, ...formatted];
-            requestAnimationFrame(refreshUI);
-        }
+        channelsNodeData = data ? Object.keys(data).map(k => ({ id: k, ...data[k], _node: 'channels' })) : [];
+        channelsData = [...linksData, ...channelsNodeData];
+        requestAnimationFrame(refreshUI);
     });
 
     db.ref('categories_ordered').on('value', snap => {
@@ -284,24 +299,26 @@ window.deleteCategory = (id) => {
 window.updateChannelInfo = (id) => {
     const name = document.getElementById(`edit-name-${id}`).value.trim();
     const url = document.getElementById(`edit-url-${id}`).value.trim();
-    const sub = document.getElementById(`edit-sub-${id}`).value.trim();
     const cat = document.getElementById(`edit-cat-${id}`).value;
     const forceProtection = document.getElementById(`edit-protection-${id}`).checked;
     const forceAudio = document.getElementById(`edit-audio-${id}`).checked;
+
+    const channel = channelsData.find(c => c.id === id);
+    const node = (channel && channel._node) ? channel._node : 'channels';
+
     if (db) {
         showToast("💾 جاري حفظ التعديلات...");
-        db.ref('links').child(id).once('value', s => {
-            const node = s.val() ? 'links' : 'channels';
-            db.ref(node).child(id).update({ name, url, subtitleUrl: sub, category: cat, forceProtection, forceAudio })
-                .then(() => showToast("✅ تم حفظ التعديلات بنجاح"));
-        });
+        db.ref(node).child(id).update({ name, url, category: cat, forceProtection, forceAudio })
+            .then(() => showToast("✅ تم حفظ التعديلات بنجاح"));
     }
 };
 
 window.deleteChannel = (id) => {
     if (confirm("هل أنت متأكد من حذف هذه القناة؟") && db) {
-        db.ref('links').child(id).remove();
-        db.ref('channels').child(id).remove()
+        const channel = channelsData.find(c => c.id === id);
+        const node = (channel && channel._node) ? channel._node : 'channels';
+
+        db.ref(node).child(id).remove()
             .then(() => showToast("🗑️ تم حذف القناة بنجاح"));
     }
 };
@@ -333,7 +350,6 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
         <div class="playing-title-wrap">
             <span class="np-cat">${category}</span> ${name}
             <div class="player-action-btns">
-                <button class="btn-external-player search-sub" onclick="window.open('https://www.google.com/search?q=ترجمة عربي لـ ${name} vtt srt subtitle', '_blank')">🔍 بحث عن ترجمة عربي</button>
                 <button class="btn-external-player" onclick="window.open('${externalUrl}', '_blank')">فتح في نافذة مستقلة ▶</button>
             </div>
         </div>
@@ -362,42 +378,7 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
         return;
     }
 
-    // 1. YouTube Handler (Fix)
-    const ytId = getYouTubeId(cleanUrl);
-    if (ytId) {
-        container.innerHTML = `
-            <iframe 
-                src="https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0&cc_load_policy=1&hl=ar&cc_lang_pref=ar&language=ar" 
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                allowfullscreen 
-                style="width: 100%; height: 100%; border: none;">
-            </iframe>`;
-        return;
-    }
-
-    // 2. Vidora & Movie Site Handler
-    if (cleanUrl.includes('vidora.su')) {
-        container.classList.add('iframe-mode');
-        container.innerHTML = `
-            <iframe 
-                src="${cleanUrl}" 
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                allowfullscreen 
-                style="width: 100%; height: 100%; border: none;">
-            </iframe>`;
-        return;
-    }
-
-    // 3. Generic Iframe Handler
-    if (cleanUrl.toLowerCase().startsWith('<iframe')) {
-        container.classList.add('iframe-mode');
-        container.innerHTML = cleanUrl;
-        const ifr = container.querySelector('iframe');
-        if (ifr) { ifr.style.width = '100%'; ifr.style.height = '100%'; ifr.style.border = 'none'; }
-        return;
-    }
-
-    // 3. Audio Handler (Premium Look - PC & Mobile)
+    // 1. Audio Handler Priority (If forced or detected)
     const isAudioExt = cleanUrl.match(/\.(mp3|wav|aac|m4a|ogg|opus|flac)(\?.*)?$/i);
     const audioKeywords = ["اغاني", "موسيقى", "music", "audio", "radio", "راديو", "قرآن", "quran", "استماع", "صوت", "تلاوة", "إذاعة", "fm", "station", "بث", "صوتي", "تلاوات", "اناشيد", "أناشيد"];
     const lowerName = (name || "").toLowerCase();
@@ -405,55 +386,57 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
     const isAudioCat = audioKeywords.some(key => lowerCat.includes(key) || lowerName.includes(key));
 
     if (forceAudio || isAudioExt || isAudioCat) {
+        container.classList.add('audio-mode');
         container.style.display = 'block';
         container.style.background = '#000';
         container.style.height = '0';
 
         container.innerHTML = `
-            <div class="audio-experience-wrapper" id="audio-wrapper">
-                <div class="audio-card">
-                    <div class="audio-header">
-                        <span class="luxury-badge">PREMIUM AUDIO</span>
-                        <div class="audio-visualizer-mini">
-                            <span></span><span></span><span></span><span></span>
+            <div class="royal-audio-hub" id="audio-wrapper">
+                <div class="royal-player-card">
+                    <div class="royal-disk-section">
+                        <div class="royal-aura-glow"></div>
+                        <div class="royal-disk-container">
+                            <div class="royal-disk" id="audio-disk">
+                                <div class="royal-disk-center">
+                                    <div class="jewel-spark"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="royal-visualizer">
+                            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+                            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
                         </div>
                     </div>
                     
-                    <div class="audio-disk-wrap">
-                        <div class="audio-disk" id="audio-disk">
-                            <div class="disk-center"></div>
-                        </div>
-                        <div class="audio-glow"></div>
+                    <div class="royal-info-section">
+                        <h2 class="royal-track-name">${name}</h2>
+                        <span class="royal-track-category">${category}</span>
                     </div>
 
-                    <div class="audio-info">
-                        <h2 class="audio-track-name">${name}</h2>
-                        <p class="audio-artist-name">${category}</p>
-                    </div>
-
-                    <div class="audio-controls-custom">
-                        <div class="progress-container" id="audio-seek-bar">
-                            <div class="progress-bar" id="audio-progress"></div>
+                    <div class="royal-controls-section">
+                        <div class="royal-progress-container" id="audio-seek-bar">
+                            <div class="royal-progress-bar" id="audio-progress"></div>
                         </div>
-                        <div class="time-info">
+                        <div class="royal-time-row">
                             <span id="curr-time">00:00</span>
                             <span id="total-time">00:00</span>
                         </div>
-                        <div class="main-btns">
-                            <button class="btn-audio-circle" id="audio-toggle-btn">
-                                <span class="icon-play" id="audio-icon-state">▶</span>
+                        <div class="royal-main-actions">
+                            <button class="royal-play-btn" id="audio-toggle-btn">
+                                <div class="royal-play-icon" id="audio-icon-state">▶</div>
                             </button>
                         </div>
-                        <div class="volume-box">
-                            <span class="volume-icon">🔊</span>
-                            <input type="range" class="volume-slider" id="audio-vol-control" min="0" max="1" step="0.05" value="1">
+                        <div class="royal-vol-row">
+                            <span class="vol-icon">🔊</span>
+                            <input type="range" class="royal-vol-slider" id="audio-vol-control" min="0" max="1" step="0.05" value="1">
                         </div>
                     </div>
-                    
-                    <audio id="main-audio-player" autoplay>
-                        <source src="${cleanUrl}" type="${isAudioExt ? 'audio/mpeg' : 'application/x-mpegURL'}">
-                    </audio>
                 </div>
+                
+                <audio id="main-audio-player" autoplay>
+                    <source src="${cleanUrl}" type="${isAudioExt ? 'audio/mpeg' : 'application/x-mpegURL'}">
+                </audio>
             </div>
         `;
 
@@ -474,12 +457,12 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
             return `${m < 10 ? '0' : ''}${m}:${sec < 10 ? '0' : ''}${sec}`;
         }
 
-        // HLS Support for Audio
         if (cleanUrl.includes('.m3u8') && typeof Hls !== 'undefined') {
             if (Hls.isSupported()) {
                 const hls = new Hls();
                 hls.loadSource(cleanUrl);
                 hls.attachMedia(player);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => player.play().catch(() => { }));
             } else if (player.canPlayType('application/vnd.apple.mpegurl')) {
                 player.src = cleanUrl;
             }
@@ -524,6 +507,45 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
             player.volume = e.target.value;
         };
 
+        player.play().catch(() => {
+            console.log("Autoplay prevented, waiting for user interaction");
+        });
+
+        return;
+    }
+
+    // 2. YouTube Handler
+    const ytId = getYouTubeId(cleanUrl);
+    if (ytId) {
+        container.innerHTML = `
+            <iframe 
+                src="https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0&cc_load_policy=1&hl=ar&cc_lang_pref=ar&language=ar" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowfullscreen 
+                style="width: 100%; height: 100%; border: none;">
+            </iframe>`;
+        return;
+    }
+
+    // 3. Vidora & Movie Site Handler
+    if (cleanUrl.includes('vidora.su')) {
+        container.classList.add('iframe-mode');
+        container.innerHTML = `
+            <iframe 
+                src="${cleanUrl}" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowfullscreen 
+                style="width: 100%; height: 100%; border: none;">
+            </iframe>`;
+        return;
+    }
+
+    // 4. Generic Iframe Handler
+    if (cleanUrl.toLowerCase().startsWith('<iframe')) {
+        container.classList.add('iframe-mode');
+        container.innerHTML = cleanUrl;
+        const ifr = container.querySelector('iframe');
+        if (ifr) { ifr.style.width = '100%'; ifr.style.height = '100%'; ifr.style.border = 'none'; }
         return;
     }
 
@@ -625,12 +647,11 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const n = document.getElementById('link-name').value.trim();
             const u = document.getElementById('link-url').value.trim();
-            const s = document.getElementById('link-subtitle')?.value.trim() || "";
             const c = document.getElementById('link-category').value;
             const p = document.getElementById('link-protection').checked;
             const fa = document.getElementById('link-force-audio').checked;
             if (db && n && u) {
-                db.ref('channels').push({ name: n, url: u, subtitleUrl: s, category: c, forceProtection: p, forceAudio: fa, timestamp: Date.now() })
+                db.ref('channels').push({ name: n, url: u, category: c, forceProtection: p, forceAudio: fa, timestamp: Date.now() })
                     .then(() => { form.reset(); showToast("✅ تم الإضافة"); });
             }
         };

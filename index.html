@@ -24,66 +24,38 @@
                 opacity: 1;
             }
         }
-
-        /* Custom Google Translate Styling */
-        #google_translate_element {
-            display: none;
-        }
-
-        .goog-te-banner-frame {
-            display: none !important;
-        }
-
-        body {
-            top: 0 !important;
-        }
     </style>
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
-
     <!-- Essential Players (Added defer for non-blocking rendering) -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.10" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.3.5/dist/shaka-player.compiled.js" defer></script>
-
-    <!-- Firebase SDKs (Compat v9) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 </head>
 
 <body>
-
     <div id="page-loader">
         <div class="luxury-loader-container">
             <div class="loader-orbit-outer"></div>
             <div class="loader-orbit-middle"></div>
             <div class="loader-orbit-inner"></div>
-            <div class="loader-core">
-                <svg viewBox="0 0 24 24" class="electric-bolt-svg">
+            <div class="loader-core"><svg viewBox="0 0 24 24" class="electric-bolt-svg">
                     <path d="M7 2v11h3v9l7-12h-4l4-8z" fill="#00f3ff" />
-                </svg>
-            </div>
+                </svg></div>
         </div>
         <div class="loader-brand-title">COMPUTER GEEK LIVES</div>
         <div class="loader-developer">Developed by Ahmed Frieg</div>
         <div class="loader-status">ESTABLISHING SECURE CONNECTION...</div>
     </div>
-
     <header>
         <div class="logo-text">Computer Geek Lives</div>
         <div class="subtitle">Future of Streaming Technology</div>
-        <div class="header-actions">
-            <div id="google_translate_element"></div>
-            <button onclick="triggerTranslate()" class="btn-translate-premium" title="ترجمة الصفحة">
-                <span class="translate-icon">🌐</span> ترجمة
-            </button>
-            <a href="admin.html" class="btn-admin-access">لوحة التحكم</a>
-        </div>
+        <div class="header-actions"><a href="admin.html" class="btn-admin-access">لوحة التحكم</a></div>
     </header>
-
     <div class="main-layout">
-
         <!-- Sidebar Channel List -->
         <aside class="sidebar">
             <h3 class="sidebar-title">قنوات البث</h3>
@@ -97,7 +69,6 @@
                 </div>
             </div>
         </aside>
-
         <!-- Main Player Area -->
         <main class="player-area">
             <div class="player-wrapper">
@@ -110,60 +81,24 @@
                 <div id="now-playing-title" class="now-playing-title">...</div>
             </div>
         </main>
-
     </div>
-
     <footer class="site-footer">
         <div class="footer-stats-bar">
-            <div class="stat-item">
-                <span class="stat-icon">👁️</span>
-                <span>عدد الزوار:</span>
-                <span id="visitor-count" class="counter-value">0</span>
-            </div>
-
-            <div class="share-container">
-                <span class="share-label">مشاركة:</span>
-                <div class="share-buttons">
-                    <button onclick="window.shareTo('whatsapp')" class="share-btn whatsapp">WhatsApp</button>
-                    <button onclick="window.shareTo('facebook')" class="share-btn facebook">Facebook</button>
-                    <button onclick="window.shareTo('copy')" class="share-btn copy-link">🔗 نسخ الرابط</button>
-                </div>
+            <div class="stat-item"><span class="stat-icon">👁️</span><span>عدد الزوار:</span><span id="visitor-count"
+                    class="counter-value">0</span></div>
+            <div class="share-container"><span class="share-label">مشاركة:</span>
+                <div class="share-buttons"><button onclick="window.shareTo('whatsapp')"
+                        class="share-btn whatsapp">WhatsApp</button><button onclick="window.shareTo('facebook')"
+                        class="share-btn facebook">Facebook</button><button onclick="window.shareTo('copy')"
+                        class="share-btn copy-link">🔗 نسخ الرابط</button></div>
             </div>
         </div>
-        <div class="copyright-text">
-            Developed by <span class="dev-credit">Ahmed Frieg</span> © 2026
-        </div>
+        <div class="copyright-text">Developed by <span class="dev-credit">Ahmed Frieg</span>© 2026 </div>
     </footer>
-
     <!-- SDKs for embedded players -->
     <div id="fb-root"></div>
     <script async defer crossorigin="anonymous"
         src="https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v18.0"></script>
-
-    <script type="text/javascript">
-        function googleTranslateElementInit() {
-            new google.translate.TranslateElement({
-                pageLanguage: 'en',
-                includedLanguages: 'ar,en,fr,es,de,it',
-                layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
-                autoDisplay: false
-            }, 'google_translate_element');
-        }
-
-        function triggerTranslate() {
-            const el = document.querySelector('.goog-te-combo');
-            if (el) {
-                el.value = 'ar';
-                el.dispatchEvent(new Event('change'));
-            } else {
-                // If the widget hasn't loaded yet, try to click the first google translate link if available
-                const firstLink = document.querySelector('.goog-te-menu-value');
-                if (firstLink) firstLink.click();
-            }
-        }
-    </script>
-    <script type="text/javascript"
-        src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
     <script src="script.js?v=2.0"></script>
 </body>
 
