@@ -12,7 +12,7 @@ const firebaseConfig = {
 
 let db;
 let channelsData = [];
-let categoriesData = []; // Storage: array of {name, order}
+let categoriesData = []; // Storage: array of {id, name, order}
 let activeStreamId = 0;
 
 // --- 2. GLOBAL UTILITIES ---
@@ -66,7 +66,6 @@ function showToast(message, isError = false) {
 // --- 3. RENDERING ENGINE ---
 
 function getOrderedCategories() {
-    // Return sorted array of category names
     return [...categoriesData].sort((a, b) => (a.order || 0) - (b.order || 0)).map(c => c.name);
 }
 
@@ -86,9 +85,8 @@ function renderChannels() {
     });
 
     const orderedCats = getOrderedCategories();
-    // Strictly only use categories defined in categoriesData
-
     grid.innerHTML = '';
+
     orderedCats.forEach(cat => {
         if (groups[cat] && groups[cat].length > 0) {
             const groupDiv = document.createElement('div');
@@ -127,10 +125,8 @@ function renderAdminList(filterQuery = "") {
     });
 
     const orderedCats = getOrderedCategories();
-
     orderedCats.forEach(cat => {
         const groupSection = document.createElement('div');
-        groupSection.className = 'admin-cat-section';
         groupSection.style.cssText = 'margin-bottom:15px; border:1px solid rgba(0,243,255,0.2); border-radius:10px; background:rgba(0,0,0,0.2); overflow:hidden;';
 
         const channelCount = groups[cat] ? groups[cat].length : 0;
@@ -167,7 +163,7 @@ function renderAdminList(filterQuery = "") {
                         <label style="font-size:11px; color:#00f3ff;"><input type="checkbox" id="edit-protection-${safeId}" ${link.forceProtection ? 'checked' : ''}> حماية</label>
                         <div style="display:flex; gap:5px;">
                             <button class="btn btn-primary" style="padding:5px 15px;" onclick="window.updateChannelInfo('${safeId}')">حفظ</button>
-                            <button class="btn btn-danger" style="padding:5px 15px;" onclick="deleteChannel('${safeId}')">حذف</button>
+                            <button class="btn btn-danger" style="padding:5px 15px;" onclick="window.deleteChannel('${safeId}')">حذف</button>
                         </div>
                     </div>
                 `;
@@ -181,10 +177,7 @@ function renderAdminList(filterQuery = "") {
 function renderCategoriesAdmin() {
     const container = document.getElementById('categories-manage-list');
     if (!container) return;
-
-    // Sort for admin view
     const sorted = [...categoriesData].sort((a, b) => (a.order || 0) - (b.order || 0));
-
     container.innerHTML = sorted.map((catObj) => `
         <div style="background:rgba(0,243,255,0.1); padding:10px; border-radius:10px; display:flex; align-items:center; gap:10px; border:1px solid rgba(0,243,255,0.3); width:100%;">
             <input type="number" value="${catObj.order || 0}" 
@@ -193,7 +186,7 @@ function renderCategoriesAdmin() {
                 title="رقم الترتيب">
             <span style="flex-grow:1; font-weight:bold;">${catObj.name}</span>
             <button onclick="window.editCategory('${catObj.id}', '${catObj.name}')" style="background:none; border:none; cursor:pointer;">✏️</button>
-            <button onclick="deleteCategory('${catObj.id}')" style="background:none; border:none; color:#ff3333; cursor:pointer;">&times;</button>
+            <button onclick="window.deleteCategory('${catObj.id}')" style="background:none; border:none; color:#ff3333; cursor:pointer;">&times;</button>
         </div>
     `).join('');
 }
@@ -214,7 +207,6 @@ function initApp() {
     firebase.initializeApp(firebaseConfig);
     db = firebase.database();
 
-    // Fetch and sync channels
     db.ref('links').on('value', snap => {
         const data = snap.val();
         channelsData = data ? Object.keys(data).map(k => ({ id: k, ...data[k] })) : [];
@@ -229,22 +221,9 @@ function initApp() {
         }
     });
 
-    // Sync categories (new structure)
     db.ref('categories_ordered').on('value', snap => {
         const data = snap.val();
-        if (data) {
-            categoriesData = Object.keys(data).map(k => ({ id: k, ...data[k] }));
-        } else {
-            // Fallback to old format
-            db.ref('categories').once('value', oldSnap => {
-                const oldData = oldSnap.val();
-                if (oldData) {
-                    const arr = Array.isArray(oldData) ? oldData : Object.values(oldData);
-                    arr.forEach((name, i) => db.ref('categories_ordered').push({ name, order: i }));
-                    db.ref('categories').remove(); // Clean up old
-                }
-            });
-        }
+        if (data) categoriesData = Object.keys(data).map(k => ({ id: k, ...data[k] }));
         requestAnimationFrame(refreshUI);
     });
 
@@ -316,37 +295,24 @@ function playStream(url, name, forceProtection, category) {
     if (!container || !titleLabel) return;
     titleLabel.innerHTML = `<span class="np-cat">${category}</span> ${name}`;
     container.innerHTML = '<div class="premium-loader"></div>';
-
     const cleanUrl = url.trim();
     const isMixedContent = window.location.protocol === 'https:' && cleanUrl.startsWith('http:');
-
     if (forceProtection || isMixedContent) {
-        container.innerHTML = `
-            <div class="protection-warning" style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:20px; padding:30px; text-align:center; height:100%;">
-                <div style="font-size:40px;">🛡️</div>
-                <div class="protection-title">نظام الحماية الذكي<br><span style="font-size:12px; color:#888;">يرجى فتح البث في نافذة مستقلة</span></div>
-                <button class="btn-launch" onclick="window.open('${cleanUrl}', '_blank')">▶ تشغيل الآن</button>
-            </div>
-        `;
+        container.innerHTML = `<div class="protection-warning" style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:20px; padding:30px; text-align:center; height:100%;"><div style="font-size:40px;">🛡️</div><div class="protection-title">نظام الحماية الذكي<br><span style="font-size:12px; color:#888;">يرجى فتح البث في نافذة مستقلة</span></div><button class="btn-launch" onclick="window.open('${cleanUrl}', '_blank')">▶ تشغيل الآن</button></div>`;
         return;
     }
-
     if (cleanUrl.toLowerCase().startsWith('<iframe')) {
         container.innerHTML = cleanUrl;
         const ifr = container.querySelector('iframe');
         if (ifr) { ifr.style.width = '100%'; ifr.style.height = '100%'; ifr.style.border = 'none'; }
         return;
     }
-
     const media = document.createElement(cleanUrl.match(/\.(mp3|wav|aac|m4a)(\?.*)?$/i) ? 'audio' : 'video');
     media.controls = true; media.autoplay = true; media.style.width = '100%'; media.style.height = '100%';
     container.innerHTML = ''; container.appendChild(media);
-
     if (cleanUrl.includes('.m3u8') && typeof Hls !== 'undefined') {
         const hls = new Hls(); hls.loadSource(cleanUrl); hls.attachMedia(media);
-    } else {
-        media.src = cleanUrl;
-    }
+    } else { media.src = cleanUrl; }
 }
 
 initApp();
@@ -366,7 +332,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
     }
-
     if (typeof firebase !== 'undefined') {
         firebase.auth().onAuthStateChanged(user => {
             const loginModal = document.getElementById('login-modal');
