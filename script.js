@@ -397,7 +397,7 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
     // --- Definitions ---
     const videoPlatforms = [
         'youtube.com', 'youtu.be', 'vimeo.com', 'dailymotion.com',
-        'twitch.tv', 'facebook.com/video', 'instagram.com', 'tiktok.com',
+        'twitch.tv', 'facebook.com', 'instagram.com', 'tiktok.com',
         'vidora.su', 'aflam4you', 'wecima', 'cima4u', 'mycima',
         'streamtape.com', 'doodstream.com', 'vidbom.com', 'uqload.com'
     ];
@@ -592,6 +592,33 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
     }
 
     // --- LOGIC: VIDEO HANDLER ---
+
+    // 0. Facebook Handler (Priority)
+    // 0. Facebook Handler (Priority)
+    if (srcUrl.includes('facebook.com') || srcUrl.includes('fb.watch')) {
+        let cleanUrl = srcUrl;
+        // Convert Reel URL to Watch URL for better compatibility with the Embed Plugin
+        if (cleanUrl.includes('/reel/')) {
+            const reelIdMatch = cleanUrl.match(/\/reel\/(\d+)/);
+            if (reelIdMatch && reelIdMatch[1]) {
+                cleanUrl = `https://www.facebook.com/watch/?v=${reelIdMatch[1]}`;
+            }
+        }
+
+        const encodedUrl = encodeURIComponent(cleanUrl);
+        container.innerHTML = `
+            <iframe 
+                src="https://www.facebook.com/plugins/video.php?href=${encodedUrl}&show_text=0&t=0"
+                width="100%" 
+                height="100%" 
+                style="border:none; overflow:hidden;" 
+                scrolling="no" 
+                frameborder="0" 
+                allowfullscreen="true" 
+                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share">
+            </iframe>`;
+        return;
+    }
 
     // 1. YouTube
     // We try to grab the ID from the srcUrl (which comes from iframe src OR raw line)
