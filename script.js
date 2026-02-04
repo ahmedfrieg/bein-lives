@@ -360,6 +360,8 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
 
     container.classList.remove('iframe-mode');
     container.style.paddingBottom = ''; // Reset to default 16:9 from CSS
+    container.style.maxWidth = '';    // Reset
+    container.style.margin = '';
 
     // Restore original title format with an external button
     // If we couldn't extract a srcUrl (e.g. raw html with no link), open btn might break, but that's edge case.
@@ -611,14 +613,16 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
                     if (!isNaN(ratio)) container.style.paddingBottom = ratio + "%";
                 }
 
+                // Make the iframe fill the container exactly without extra styling that causes zoom
                 ifr.style.width = "100%";
                 ifr.style.height = "100%";
+                ifr.style.position = "absolute";
+                ifr.style.top = "0";
+                ifr.style.left = "0";
                 ifr.style.border = "none";
                 ifr.setAttribute('allowfullscreen', 'true');
                 ifr.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
                 ifr.setAttribute('allow', 'autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share');
-                ifr.removeAttribute('width');
-                ifr.removeAttribute('height');
             }
             return;
         }
@@ -644,12 +648,15 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
 
         const encoded = encodeURIComponent(finalUrl);
         container.classList.add('iframe-mode');
+        // Set a balanced aspect ratio for plain links to avoid "huge" looking videos
+        if (!container.style.paddingBottom) container.style.paddingBottom = "56.25%";
+
         container.innerHTML = `
             <iframe 
                 src="https://www.facebook.com/plugins/video.php?href=${encoded}&show_text=0&t=0&adapt_container_width=true"
                 width="100%" 
                 height="100%" 
-                style="border:none;overflow:hidden;" 
+                style="border:none;overflow:hidden;position:absolute;top:0;left:0;" 
                 scrolling="no" 
                 frameborder="0" 
                 allowfullscreen="true" 
