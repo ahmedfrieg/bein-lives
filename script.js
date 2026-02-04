@@ -104,7 +104,7 @@ function renderChannels() {
                 const item = document.createElement('div');
                 item.className = 'channel-item';
                 item.innerHTML = `<div class="channel-name">${ch.name}</div><div class="play-icon">▶</div>`;
-                item.onclick = () => playStream(ch.url, ch.name, ch.forceProtection, cat, ch.forceAudio);
+                item.onclick = () => playStream(ch.url, ch.name, ch.forceProtection, cat, ch.forceAudio, ch.subtitleUrl);
                 listDiv.appendChild(item);
             });
             groupDiv.appendChild(listDiv);
@@ -154,8 +154,9 @@ function renderAdminList(filterQuery = "") {
 
                 const safeId = String(link.id);
                 div.innerHTML = `
-                    <div class="admin-item-grid">
+                    <div class="admin-item-grid" style="grid-template-columns: 1fr 1fr 1fr;">
                         <input type="text" id="edit-name-${safeId}" value="${link.name}" class="form-control" placeholder="اسم القناة">
+                        <input type="text" id="edit-sub-${safeId}" value="${link.subtitleUrl || ''}" class="form-control" placeholder="رابط ملف الترجمة (Subtitle URL)">
                         <select id="edit-cat-${safeId}" class="form-control admin-cat-select">
                             ${orderedCats.map(c => `<option value="${c}" ${c === cat ? 'selected' : ''}>${c}</option>`).join('')}
                         </select>
@@ -283,13 +284,15 @@ window.deleteCategory = (id) => {
 window.updateChannelInfo = (id) => {
     const name = document.getElementById(`edit-name-${id}`).value.trim();
     const url = document.getElementById(`edit-url-${id}`).value.trim();
+    const sub = document.getElementById(`edit-sub-${id}`).value.trim();
     const cat = document.getElementById(`edit-cat-${id}`).value;
     const forceProtection = document.getElementById(`edit-protection-${id}`).checked;
     const forceAudio = document.getElementById(`edit-audio-${id}`).checked;
     if (db) {
+        showToast("💾 جاري حفظ التعديلات...");
         db.ref('links').child(id).once('value', s => {
             const node = s.val() ? 'links' : 'channels';
-            db.ref(node).child(id).update({ name, url, category: cat, forceProtection, forceAudio })
+            db.ref(node).child(id).update({ name, url, subtitleUrl: sub, category: cat, forceProtection, forceAudio })
                 .then(() => showToast("✅ تم حفظ التعديلات بنجاح"));
         });
     }
@@ -309,7 +312,7 @@ function getYouTubeId(url) {
     return (match && match[2].length === 11) ? match[2] : null;
 }
 
-function playStream(url, name, forceProtection, category, forceAudio = false) {
+function playStream(url, name, forceProtection, category, forceAudio = false, subtitleUrl = "") {
     activeStreamId++;
     const container = document.getElementById('video-container');
     const titleLabel = document.getElementById('now-playing-title');
@@ -325,11 +328,14 @@ function playStream(url, name, forceProtection, category, forceAudio = false) {
         if (match) externalUrl = match[1];
     }
 
-    // Restore original title format with an external button
+    // Restore original title format with an external button and a Search Subtitles button
     titleLabel.innerHTML = `
         <div class="playing-title-wrap">
             <span class="np-cat">${category}</span> ${name}
-            <button class="btn-external-player" onclick="window.open('${externalUrl}', '_blank')">فتح في نافذة مستقلة ▶</button>
+            <div class="player-action-btns">
+                <button class="btn-external-player search-sub" onclick="window.open('https://www.google.com/search?q=ترجمة عربي لـ ${name} vtt srt subtitle', '_blank')">🔍 بحث عن ترجمة عربي</button>
+                <button class="btn-external-player" onclick="window.open('${externalUrl}', '_blank')">فتح في نافذة مستقلة ▶</button>
+            </div>
         </div>
     `;
 
@@ -361,7 +367,7 @@ function playStream(url, name, forceProtection, category, forceAudio = false) {
     if (ytId) {
         container.innerHTML = `
             <iframe 
-                src="https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0" 
+                src="https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0&cc_load_policy=1&hl=ar&cc_lang_pref=ar&language=ar" 
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                 allowfullscreen 
                 style="width: 100%; height: 100%; border: none;">
@@ -529,6 +535,17 @@ function playStream(url, name, forceProtection, category, forceAudio = false) {
     media.style.height = '100%';
     media.style.backgroundColor = '#000';
 
+    // Inject Arabic Subtitles if available
+    if (subtitleUrl) {
+        const track = document.createElement('track');
+        track.kind = 'subtitles';
+        track.label = 'العربية';
+        track.srclang = 'ar';
+        track.src = subtitleUrl;
+        track.default = true;
+        media.appendChild(track);
+    }
+
     // Add event listeners for errors (Fix for Foreign Movies)
     media.onerror = () => {
         console.error("Video Error Detected. Redirecting to protection mode...");
@@ -553,13 +570,34 @@ function playStream(url, name, forceProtection, category, forceAudio = false) {
     container.innerHTML = '';
     container.appendChild(media);
 
+    // Intelligent Auto-Subtitle Selection Logic
+    media.addEventListener('loadedmetadata', () => {
+        const tracks = media.textTracks;
+        for (let i = 0; i < tracks.length; i++) {
+            if (tracks[i].language.startsWith('ar') || tracks[i].label.toLowerCase().includes('arabic') || tracks[i].label.toLowerCase().includes('عربي')) {
+                tracks[i].mode = 'showing';
+                showToast("✨ تم تفعيل الترجمة العربية تلقائياً");
+            }
+        }
+    });
+
     if (cleanUrl.includes('.m3u8') && typeof Hls !== 'undefined') {
         if (Hls.isSupported()) {
-            const hls = new Hls();
+            const hls = new Hls({
+                autoStartLoad: true,
+                startFragPrefetch: true,
+                enableSubtitle: true // Force subtitles in HLS
+            });
             hls.loadSource(cleanUrl);
             hls.attachMedia(media);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                // Try to find Arabic subtitle track in HLS manifest
+                const subTracks = hls.subtitleTracks;
+                const arIndex = subTracks.findIndex(t => t.lang.startsWith('ar') || t.name.toLowerCase().includes('arabic'));
+                if (arIndex !== -1) hls.subtitleTrack = arIndex;
+            });
             hls.on(Hls.Events.ERROR, function (event, data) {
-                if (data.fatal) { media.src = cleanUrl; } // Fallback to native
+                if (data.fatal) { media.src = cleanUrl; }
             });
         } else if (media.canPlayType('application/vnd.apple.mpegurl')) {
             media.src = cleanUrl;
@@ -587,11 +625,12 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const n = document.getElementById('link-name').value.trim();
             const u = document.getElementById('link-url').value.trim();
+            const s = document.getElementById('link-subtitle')?.value.trim() || "";
             const c = document.getElementById('link-category').value;
             const p = document.getElementById('link-protection').checked;
             const fa = document.getElementById('link-force-audio').checked;
             if (db && n && u) {
-                db.ref('channels').push({ name: n, url: u, category: c, forceProtection: p, forceAudio: fa, timestamp: Date.now() })
+                db.ref('channels').push({ name: n, url: u, subtitleUrl: s, category: c, forceProtection: p, forceAudio: fa, timestamp: Date.now() })
                     .then(() => { form.reset(); showToast("✅ تم الإضافة"); });
             }
         };

@@ -63,6 +63,51 @@ header {
     z-index: 10;
 }
 
+.header-actions {
+    position: absolute;
+    top: 50%;
+    right: 20px;
+    transform: translateY(-50%);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.btn-translate-premium {
+    background: rgba(0, 243, 255, 0.1);
+    border: 1px solid rgba(0, 243, 255, 0.4);
+    color: var(--primary-color);
+    padding: 8px 18px;
+    border-radius: 50px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: 0.3s;
+    backdrop-filter: blur(5px);
+}
+
+.btn-translate-premium:hover {
+    background: var(--primary-color);
+    color: #000;
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.6);
+}
+
+@media (max-width: 900px) {
+    header {
+        padding-bottom: 80px;
+    }
+
+    .header-actions {
+        top: auto;
+        bottom: 15px;
+        right: 50%;
+        transform: translateX(50%);
+    }
+}
+
 .logo-text {
     font-family: var(--font-tech);
     font-size: 2.5rem;
@@ -771,10 +816,33 @@ footer {
     box-shadow: 0 0 15px var(--primary-color);
 }
 
+.player-action-btns {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.btn-external-player.search-sub {
+    background: rgba(212, 175, 55, 0.1);
+    border-color: rgba(212, 175, 55, 0.3);
+    color: #D4AF37;
+}
+
+.btn-external-player.search-sub:hover {
+    background: #D4AF37;
+    color: #000;
+    box-shadow: 0 0 15px #D4AF37;
+}
+
 @media (max-width: 768px) {
     .btn-external-player {
         font-size: 0.7rem;
         padding: 5px 12px;
+        width: 100%;
+    }
+
+    .player-action-btns {
+        flex-direction: column;
     }
 }
 
@@ -1554,18 +1622,15 @@ body {
 
 /* Administrative Access Button */
 .btn-admin-access {
-    position: absolute;
-    top: 15px;
-    right: 20px;
     background: rgba(255, 255, 255, 0.05);
-    color: #444;
-    /* Very subtle so only you know it's there */
+    color: rgba(255, 255, 255, 0.5);
     text-decoration: none;
-    padding: 5px 12px;
-    border-radius: 5px;
-    font-size: 0.75rem;
+    padding: 8px 15px;
+    border-radius: 50px;
+    font-size: 0.85rem;
     border: 1px solid rgba(255, 255, 255, 0.1);
     transition: 0.3s;
+    font-weight: bold;
 }
 
 .btn-admin-access:hover {

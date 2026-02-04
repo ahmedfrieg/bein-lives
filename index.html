@@ -24,6 +24,19 @@
                 opacity: 1;
             }
         }
+
+        /* Custom Google Translate Styling */
+        #google_translate_element {
+            display: none;
+        }
+
+        .goog-te-banner-frame {
+            display: none !important;
+        }
+
+        body {
+            top: 0 !important;
+        }
     </style>
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
@@ -60,7 +73,13 @@
     <header>
         <div class="logo-text">Computer Geek Lives</div>
         <div class="subtitle">Future of Streaming Technology</div>
-        <a href="admin.html" class="btn-admin-access">لوحة التحكم</a>
+        <div class="header-actions">
+            <div id="google_translate_element"></div>
+            <button onclick="triggerTranslate()" class="btn-translate-premium" title="ترجمة الصفحة">
+                <span class="translate-icon">🌐</span> ترجمة
+            </button>
+            <a href="admin.html" class="btn-admin-access">لوحة التحكم</a>
+        </div>
     </header>
 
     <div class="main-layout">
@@ -121,6 +140,30 @@
     <script async defer crossorigin="anonymous"
         src="https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v18.0"></script>
 
+    <script type="text/javascript">
+        function googleTranslateElementInit() {
+            new google.translate.TranslateElement({
+                pageLanguage: 'en',
+                includedLanguages: 'ar,en,fr,es,de,it',
+                layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
+                autoDisplay: false
+            }, 'google_translate_element');
+        }
+
+        function triggerTranslate() {
+            const el = document.querySelector('.goog-te-combo');
+            if (el) {
+                el.value = 'ar';
+                el.dispatchEvent(new Event('change'));
+            } else {
+                // If the widget hasn't loaded yet, try to click the first google translate link if available
+                const firstLink = document.querySelector('.goog-te-menu-value');
+                if (firstLink) firstLink.click();
+            }
+        }
+    </script>
+    <script type="text/javascript"
+        src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
     <script src="script.js?v=2.0"></script>
 </body>
 
