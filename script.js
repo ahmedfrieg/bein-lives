@@ -336,15 +336,26 @@ function playStream(url, name, forceProtection = false, category = "") {
     const container = document.getElementById('video-container');
     const titleLabel = document.getElementById('now-playing-title');
     if (!container || !titleLabel) return;
+
     titleLabel.innerHTML = category ? `<span class="np-cat">${category}</span> ${name}` : name;
     container.innerHTML = '<div class="premium-loader"></div>';
-    const cleanUrl = url.trim();
 
-    if (forceProtection) {
+    const cleanUrl = url.trim();
+    // Auto-detect Mixed Content (HTTP on HTTPS site)
+    const isMixedContent = window.location.protocol === 'https:' && cleanUrl.startsWith('http:');
+
+    if (forceProtection || isMixedContent) {
         container.innerHTML = `
-            <div class="protection-warning">
-                <div class="protection-title"><span class="highlight-gold">نظام الحماية مفعل 🛡️</span><br>للمشاهدة عبر السيرفر مباشرة🌹</div>
-                <button class="btn-launch" onclick="window.open('${cleanUrl}', '_blank')">اضغط هنا ❤️</button>
+            <div class="protection-warning" style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:20px; padding:30px; text-align:center; height:100%; background:radial-gradient(circle, rgba(0,243,255,0.05) 0%, rgba(0,0,0,0.8) 100%);">
+                <div style="font-size:40px;">🛡️</div>
+                <div class="protection-title" style="font-size:16px; line-height:1.6;">
+                    <span class="highlight-gold" style="font-size:20px; display:block; margin-bottom:10px;">نظام الحماية الذكي</span>
+                    بسبب قيود المتصفح على الروابط غير المشفرة،<br>يرجى تشغيل البث في نافذة مستقلة للمشاهدة بأعلى جودة.
+                </div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+                    <button class="btn-launch" style="padding:12px 30px; background:var(--primary-color); color:#000; font-weight:bold;" onclick="window.open('${cleanUrl}', '_blank')">▶ تشغيل الآن</button>
+                    <button class="btn-launch" style="padding:12px 30px; background:rgba(255,255,255,0.1); border:1px solid #555;" onclick="navigator.clipboard.writeText('${cleanUrl}').then(()=>showToast('✅ تم نسخ رابط البث لفتحه في VLC'))">🔗 نسخ الرابط لـ VLC</button>
+                </div>
             </div>
         `;
         return;
