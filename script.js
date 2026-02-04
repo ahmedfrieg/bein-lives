@@ -593,31 +593,40 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
 
     // --- LOGIC: VIDEO HANDLER ---
 
-    // 0. Facebook Handler (Resilient Version)
+    // 0. Facebook Handler (Balanced & Resilient)
     if (srcUrl.includes('facebook.com') || srcUrl.includes('fb.watch') || srcUrl.includes('fb.com')) {
-        let videoUrl = srcUrl;
+        // CASE 1: If the user provided a full IFRAME/HTML code (Preserve tokens)
+        if (isHtmlEmbed) {
+            container.classList.add('iframe-mode');
+            container.innerHTML = rawInput;
 
-        try {
-            // If it's already a plugin URL, extract the actual video link
-            if (videoUrl.includes('plugins/video.php')) {
-                const searchParams = new URLSearchParams(videoUrl.split('?')[1] || '');
-                const href = searchParams.get('href');
-                if (href) videoUrl = decodeURIComponent(href);
+            const ifr = container.querySelector('iframe');
+            if (ifr) {
+                ifr.style.cssText = "width:100% !important; height:100% !important; border:none !important; min-height:450px;";
+                ifr.setAttribute('allowfullscreen', 'true');
+                ifr.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
+                ifr.setAttribute('allow', 'autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share');
+                ifr.removeAttribute('width');
+                ifr.removeAttribute('height');
             }
-
-            // Extract the numeric ID - the most stable way to embed
-            // We search for a sequence of 10+ digits which is standard for FB videos
-            const idMatch = videoUrl.match(/(?:videos\/|reel\/|watch\/|v=|fbid=|\/v\/|watch\/\?v=)(\d{10,})/) || videoUrl.match(/\/(\d{10,})(\/|\?|$)/);
-
-            if (idMatch && idMatch[1]) {
-                videoUrl = `https://www.facebook.com/video.php?v=${idMatch[1]}`;
-            }
-        } catch (e) {
-            console.error("FB URL Parsing error:", e);
-            // Fallback to the original srcUrl if parsing fails
+            return;
         }
 
-        const encoded = encodeURIComponent(videoUrl);
+        // CASE 2: If the user provided a plain LINK (URL)
+        let finalUrl = srcUrl;
+
+        try {
+            // Convert mobile links for better plugin support
+            if (finalUrl.includes('m.facebook.com')) finalUrl = finalUrl.replace('m.facebook.com', 'www.facebook.com');
+
+            // Extract the numeric ID - the most stable way to embed
+            const idMatch = finalUrl.match(/(?:videos\/|reel\/|watch\/|v=|fbid=|\/v\/|watch\/\?v=)(\d{10,})/) || finalUrl.match(/\/(\d{10,})(\/|\?|$)/);
+            if (idMatch && idMatch[1]) {
+                finalUrl = `https://www.facebook.com/watch/?v=${idMatch[1]}`;
+            }
+        } catch (e) { console.error("FB Rebuild error:", e); }
+
+        const encoded = encodeURIComponent(finalUrl);
         container.classList.add('iframe-mode');
         container.innerHTML = `
             <iframe 
@@ -628,6 +637,7 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
                 scrolling="no" 
                 frameborder="0" 
                 allowfullscreen="true" 
+                referrerpolicy="no-referrer-when-downgrade"
                 allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share">
             </iframe>`;
         return;
