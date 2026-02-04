@@ -359,6 +359,7 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
     srcUrl = srcUrl.trim();
 
     container.classList.remove('iframe-mode');
+    container.style.paddingBottom = ''; // Reset to default 16:9 from CSS
 
     // Restore original title format with an external button
     // If we couldn't extract a srcUrl (e.g. raw html with no link), open btn might break, but that's edge case.
@@ -602,7 +603,17 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
 
             const ifr = container.querySelector('iframe');
             if (ifr) {
-                ifr.style.cssText = "width:100% !important; height:100% !important; border:none !important; min-height:450px;";
+                // Detect Natural Aspect Ratio from User's Embed Code
+                const w = ifr.getAttribute('width');
+                const h = ifr.getAttribute('height');
+                if (w && h) {
+                    const ratio = (parseInt(h) / parseInt(w)) * 100;
+                    if (!isNaN(ratio)) container.style.paddingBottom = ratio + "%";
+                }
+
+                ifr.style.width = "100%";
+                ifr.style.height = "100%";
+                ifr.style.border = "none";
                 ifr.setAttribute('allowfullscreen', 'true');
                 ifr.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
                 ifr.setAttribute('allow', 'autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share');
@@ -624,6 +635,11 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
             if (idMatch && idMatch[1]) {
                 finalUrl = `https://www.facebook.com/watch/?v=${idMatch[1]}`;
             }
+
+            // Detect if it's a Reel to set vertical aspect ratio
+            if (srcUrl.toLowerCase().includes('/reel/') || srcUrl.toLowerCase().includes('/reels/')) {
+                container.style.paddingBottom = "177.77%"; // 9:16
+            }
         } catch (e) { console.error("FB Rebuild error:", e); }
 
         const encoded = encodeURIComponent(finalUrl);
@@ -633,7 +649,7 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
                 src="https://www.facebook.com/plugins/video.php?href=${encoded}&show_text=0&t=0&adapt_container_width=true"
                 width="100%" 
                 height="100%" 
-                style="border:none;overflow:hidden;min-height:500px;" 
+                style="border:none;overflow:hidden;" 
                 scrolling="no" 
                 frameborder="0" 
                 allowfullscreen="true" 
@@ -685,7 +701,18 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
 
         // Try to force full size on any iframes found
         const ifr = container.querySelector('iframe');
-        if (ifr) { ifr.style.width = '100%'; ifr.style.height = '100%'; ifr.style.border = 'none'; }
+        if (ifr) {
+            // Detect Natural Aspect Ratio from User's Embed Code
+            const w = ifr.getAttribute('width');
+            const h = ifr.getAttribute('height');
+            if (w && h) {
+                const ratio = (parseInt(h) / parseInt(w)) * 100;
+                if (!isNaN(ratio)) container.style.paddingBottom = ratio + "%";
+            }
+            ifr.style.width = '100%';
+            ifr.style.height = '100%';
+            ifr.style.border = 'none';
+        }
         return;
     }
 
