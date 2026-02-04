@@ -12,7 +12,7 @@ const firebaseConfig = {
 
 let db;
 let channelsData = [];
-let categoriesData = ["عام", "أفلام", "مسلسلات", "أغاني", "صور"];
+let categoriesData = []; // Storage: array of {name, order}
 let activeStreamId = 0;
 
 // --- 2. GLOBAL UTILITIES ---
@@ -53,16 +53,9 @@ function showToast(message, isError = false) {
     `;
     toast.textContent = message;
     document.body.appendChild(toast);
-
     const style = document.createElement('style');
-    style.innerHTML = `
-        @keyframes toast-in {
-            from { bottom: -50px; opacity: 0; }
-            to { bottom: 30px; opacity: 1; }
-        }
-    `;
+    style.innerHTML = `@keyframes toast-in { from { bottom: -50px; opacity: 0; } to { bottom: 30px; opacity: 1; } }`;
     document.head.appendChild(style);
-
     setTimeout(() => {
         toast.style.opacity = '0';
         toast.style.transition = 'opacity 0.5s ease-out';
@@ -72,22 +65,16 @@ function showToast(message, isError = false) {
 
 // --- 3. RENDERING ENGINE ---
 
+function getOrderedCategories() {
+    // Return sorted array of category names
+    return [...categoriesData].sort((a, b) => (a.order || 0) - (b.order || 0)).map(c => c.name);
+}
+
 function renderChannels() {
     const grid = document.getElementById('channels-list');
     if (!grid) return;
-
     if (channelsData.length === 0) {
-        grid.innerHTML = `
-            <div style="grid-column: 1 / -1; padding:50px 20px; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%;">
-                <div class="premium-loader"></div>
-                <div style="margin-top:25px; width:100%; max-width:180px;">
-                    <div style="color:#00f3ff; font-family:'Orbitron', sans-serif; font-size:10px; letter-spacing:4px; text-shadow:0 0 10px #00f3ff; margin-bottom:10px; font-weight:bold;">SYSTEM SCANNING</div>
-                    <div style="width:100%; height:2px; background:rgba(0,243,255,0.1); position:relative; overflow:hidden; border-radius:10px;">
-                        <div style="position:absolute; top:0; left:-100%; width:100%; height:100%; background:linear-gradient(90deg, transparent, #00f3ff, transparent); animation: scanning-beam 1.5s infinite;"></div>
-                    </div>
-                </div>
-            </div>
-        `;
+        grid.innerHTML = '<div class="premium-loader"></div>';
         return;
     }
 
@@ -98,16 +85,19 @@ function renderChannels() {
         groups[cat].push(ch);
     });
 
-    const fragment = document.createDocumentFragment();
-    // Use categoriesData for order
-    categoriesData.forEach(cat => {
+    const orderedCats = getOrderedCategories();
+    // Add any cat from channels but not in categoriesData to the end
+    const existingCats = new Set(orderedCats);
+    Object.keys(groups).forEach(cat => { if (!existingCats.has(cat)) orderedCats.push(cat); });
+
+    grid.innerHTML = '';
+    orderedCats.forEach(cat => {
         if (groups[cat] && groups[cat].length > 0) {
             const groupDiv = document.createElement('div');
             groupDiv.className = 'category-group collapsed';
             groupDiv.innerHTML = `
                 <div class="category-header luxury-header" onclick="this.parentElement.classList.toggle('collapsed')">
-                    <span>${cat}</span>
-                    <span class="header-arrow">▾</span>
+                    <span>${cat}</span><span class="header-arrow">▾</span>
                 </div>
             `;
             const listDiv = document.createElement('div');
@@ -116,21 +106,13 @@ function renderChannels() {
                 const item = document.createElement('div');
                 item.className = 'channel-item';
                 item.innerHTML = `<div class="channel-name">${ch.name}</div><div class="play-icon">▶</div>`;
-                item.onclick = (e) => {
-                    e.stopPropagation();
-                    playStream(ch.url, ch.name, ch.forceProtection, cat);
-                    document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
-                    item.classList.add('active');
-                };
+                item.onclick = () => playStream(ch.url, ch.name, ch.forceProtection, cat);
                 listDiv.appendChild(item);
             });
             groupDiv.appendChild(listDiv);
-            fragment.appendChild(groupDiv);
+            grid.appendChild(groupDiv);
         }
     });
-
-    grid.innerHTML = '';
-    grid.appendChild(fragment);
 }
 
 function renderAdminList(filterQuery = "") {
@@ -138,114 +120,64 @@ function renderAdminList(filterQuery = "") {
     if (!container) return;
     container.innerHTML = '';
 
-    let displayData = channelsData;
-    if (filterQuery) {
-        const lowerQ = filterQuery.toLowerCase();
-        displayData = channelsData.filter(ch => ch.name.toLowerCase().includes(lowerQ));
-    }
-
     const groups = {};
-    displayData.forEach(ch => {
+    channelsData.forEach(ch => {
+        if (filterQuery && !ch.name.toLowerCase().includes(filterQuery.toLowerCase())) return;
         const cat = ch.category || "عام";
         if (!groups[cat]) groups[cat] = [];
         groups[cat].push(ch);
     });
 
-    // Use categoriesData for order in admin too
-    categoriesData.forEach(cat => {
+    const orderedCats = getOrderedCategories();
+    const existingCats = new Set(orderedCats);
+    Object.keys(groups).forEach(cat => { if (!existingCats.has(cat)) orderedCats.push(cat); });
+
+    orderedCats.forEach(cat => {
         const groupSection = document.createElement('div');
-        groupSection.style.marginBottom = '15px';
-        groupSection.style.border = '1px solid rgba(0, 243, 255, 0.2)';
-        groupSection.style.borderRadius = '10px';
-        groupSection.style.background = 'rgba(0, 0, 0, 0.2)';
-        groupSection.style.overflow = 'hidden';
+        groupSection.className = 'admin-cat-section';
+        groupSection.style.cssText = 'margin-bottom:15px; border:1px solid rgba(0,243,255,0.2); border-radius:10px; background:rgba(0,0,0,0.2); overflow:hidden;';
 
-        const isExpanded = !!filterQuery;
         const channelCount = groups[cat] ? groups[cat].length : 0;
+        groupSection.innerHTML = `
+            <div style="background:rgba(0,243,255,0.1); padding:15px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;" onclick="let b=this.nextElementSibling; b.style.display=b.style.display==='none'?'block':'none'">
+                <h3 style="margin:0; font-size:1.1rem; color:var(--primary-color);">📂 ${cat} (${channelCount})</h3>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="group-body" style="padding:15px; display:none; border-top:1px solid rgba(0,243,255,0.1);"></div>
+        `;
 
-        const headerDiv = document.createElement('div');
-        headerDiv.style.background = 'rgba(0, 243, 255, 0.1)';
-        headerDiv.style.padding = '15px';
-        headerDiv.style.cursor = 'pointer';
-        headerDiv.style.display = 'flex';
-        headerDiv.style.justifyContent = 'space-between';
-        headerDiv.style.alignItems = 'center';
-
-        headerDiv.onclick = () => {
-            const body = groupSection.querySelector('.group-body');
-            const arrow = groupSection.querySelector('.arrow-icon');
-            if (body.style.display === 'none') {
-                body.style.display = 'block';
-                arrow.style.transform = 'rotate(180deg)';
-            } else {
-                body.style.display = 'none';
-                arrow.style.transform = 'rotate(0deg)';
-            }
-        };
-
-        const title = document.createElement('h3');
-        title.style.margin = '0';
-        title.style.fontSize = '1.1rem';
-        title.style.color = 'var(--primary-color)';
-        title.innerHTML = `📂 ${cat} <span style="font-size:0.8em; color:#888; margin-right:5px;">(${channelCount})</span>`;
-
-        const arrow = document.createElement('span');
-        arrow.className = 'arrow-icon';
-        arrow.textContent = '▼';
-        arrow.style.transition = 'transform 0.3s ease';
-        arrow.style.color = '#00f3ff';
-        if (isExpanded) arrow.style.transform = 'rotate(180deg)';
-
-        headerDiv.appendChild(title);
-        headerDiv.appendChild(arrow);
-        groupSection.appendChild(headerDiv);
-
-        const channelsContainer = document.createElement('div');
-        channelsContainer.className = 'group-body';
-        channelsContainer.style.padding = '15px';
-        channelsContainer.style.display = isExpanded ? 'block' : 'none';
-        channelsContainer.style.borderTop = '1px solid rgba(0, 243, 255, 0.1)';
-
+        const body = groupSection.querySelector('.group-body');
         if (!groups[cat] || groups[cat].length === 0) {
-            channelsContainer.innerHTML = '<div style="text-align:center; color:#555; font-size:12px;">قائمة فارغة - أضف قنوات لهذا القسم</div>';
+            body.innerHTML = '<div style="text-align:center; color:#555; font-size:12px;">قائمة فارغة</div>';
         } else {
             groups[cat].forEach(link => {
                 const div = document.createElement('div');
                 div.className = 'admin-list-item';
-                div.style.flexDirection = 'column';
-                div.style.marginBottom = '15px';
+                div.style.background = 'rgba(255,255,255,0.02)';
+                div.style.marginBottom = '10px';
+                div.style.padding = '10px';
+                div.style.borderRadius = '8px';
 
                 const safeId = String(link.id);
-                const currentCat = link.category || "عام";
-                let catOptions = categoriesData.map(c => `<option value="${c}" ${c === currentCat ? 'selected' : ''}>${c}</option>`).join('');
-
-                const isProtected = link.forceProtection || false;
                 div.innerHTML = `
-                    <div style="margin-bottom:15px; width: 100%;">
-                        <label style="color:#00f3ff; font-size:13px; font-weight:bold; display:block; margin-bottom:5px;">القسم</label>
-                        <select id="edit-cat-${safeId}" class="form-control" style="background:#000; color:#fff; width:100%; border:1px solid #333;">${catOptions}</select>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+                        <input type="text" id="edit-name-${safeId}" value="${link.name}" class="form-control" placeholder="اسم القناة">
+                        <select id="edit-cat-${safeId}" class="form-control" style="background:#000; color:#fff;">
+                            ${orderedCats.map(c => `<option value="${c}" ${c === cat ? 'selected' : ''}>${c}</option>`).join('')}
+                        </select>
                     </div>
-                    <div style="margin-bottom:15px; width: 100%;">
-                        <label style="color:#00f3ff; font-size:13px; font-weight:bold; display:block; margin-bottom:5px;">الاسم</label>
-                        <input type="text" id="edit-name-${safeId}" value="${link.name}" class="form-control" style="width:100%;">
-                    </div>
-                    <div style="margin-bottom:15px; width: 100%;">
-                        <label style="color:#00f3ff; font-size:13px; font-weight:bold; display:block; margin-bottom:5px;">الرابط (URL / Iframe)</label>
-                        <textarea id="edit-url-${safeId}" class="form-control" style="height:70px; width:100%;">${link.url}</textarea>
-                    </div>
-                    <div style="margin-bottom:15px; width: 100%; display: flex; align-items: center; gap: 10px; background: rgba(0, 243, 255, 0.05); padding: 8px; border-radius: 5px;">
-                        <input type="checkbox" id="edit-protection-${safeId}" ${isProtected ? 'checked' : ''}>
-                        <label for="edit-protection-${safeId}" style="color:#00f3ff; font-size:12px; cursor: pointer; margin: 0;">نظام الحماية (فتح في نافذة مستقلة)</label>
-                    </div>
-                    <div style="display:flex; gap:10px; width:100%; justify-content: flex-end;">
-                        <button class="btn btn-primary" onclick="window.updateChannelInfo('${safeId}')">💾 حفظ</button>
-                        <button class="btn btn-danger" onclick="deleteChannel('${safeId}')">🗑️ مسح</button>
+                    <textarea id="edit-url-${safeId}" class="form-control" style="height:50px; width:100%; margin-bottom:10px;">${link.url}</textarea>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <label style="font-size:11px; color:#00f3ff;"><input type="checkbox" id="edit-protection-${safeId}" ${link.forceProtection ? 'checked' : ''}> حماية</label>
+                        <div style="display:flex; gap:5px;">
+                            <button class="btn btn-primary" style="padding:5px 15px;" onclick="window.updateChannelInfo('${safeId}')">حفظ</button>
+                            <button class="btn btn-danger" style="padding:5px 15px;" onclick="deleteChannel('${safeId}')">حذف</button>
+                        </div>
                     </div>
                 `;
-                channelsContainer.appendChild(div);
+                body.appendChild(div);
             });
         }
-        groupSection.appendChild(channelsContainer);
         container.appendChild(groupSection);
     });
 }
@@ -253,15 +185,19 @@ function renderAdminList(filterQuery = "") {
 function renderCategoriesAdmin() {
     const container = document.getElementById('categories-manage-list');
     if (!container) return;
-    container.innerHTML = categoriesData.map((cat, index) => `
-        <div style="background:rgba(0,243,255,0.1); padding:8px 15px; border-radius:10px; display:flex; align-items:center; gap:10px; border:1px solid rgba(0,243,255,0.3); width:100%;">
-            <div style="display:flex; flex-direction:column; gap:2px;">
-                <button onclick="moveCategory(${index}, -1)" style="background:none; border:none; color:#00f3ff; cursor:pointer; font-size:12px;" title="تحريك لأعلى">▲</button>
-                <button onclick="moveCategory(${index}, 1)" style="background:none; border:none; color:#00f3ff; cursor:pointer; font-size:12px;" title="تحريك لأسفل">▼</button>
-            </div>
-            <span style="flex-grow:1; font-weight:bold;">${cat}</span>
-            <button onclick="window.editCategory('${cat}')" style="background:none; border:none; cursor:pointer;">✏️</button>
-            <button onclick="deleteCategory('${cat}')" style="background:none; border:none; color:#ff3333; cursor:pointer;">&times;</button>
+
+    // Sort for admin view
+    const sorted = [...categoriesData].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    container.innerHTML = sorted.map((catObj) => `
+        <div style="background:rgba(0,243,255,0.1); padding:10px; border-radius:10px; display:flex; align-items:center; gap:10px; border:1px solid rgba(0,243,255,0.3); width:100%;">
+            <input type="number" value="${catObj.order || 0}" 
+                style="width:50px; background:#000; color:#00f3ff; border:1px solid #333; border-radius:5px; text-align:center; padding:5px;"
+                onchange="window.updateCategoryOrder('${catObj.id}', this.value)"
+                title="رقم الترتيب">
+            <span style="flex-grow:1; font-weight:bold;">${catObj.name}</span>
+            <button onclick="window.editCategory('${catObj.id}', '${catObj.name}')" style="background:none; border:none; cursor:pointer;">✏️</button>
+            <button onclick="deleteCategory('${catObj.id}')" style="background:none; border:none; color:#ff3333; cursor:pointer;">&times;</button>
         </div>
     `).join('');
 }
@@ -269,9 +205,8 @@ function renderCategoriesAdmin() {
 function updateCategoryDropdowns() {
     const mainSelect = document.getElementById('link-category');
     if (mainSelect) {
-        const val = mainSelect.value;
-        mainSelect.innerHTML = categoriesData.map(c => `<option value="${c}">${c}</option>`).join('');
-        if (categoriesData.includes(val)) mainSelect.value = val;
+        const ordered = getOrderedCategories();
+        mainSelect.innerHTML = ordered.map(c => `<option value="${c}">${c}</option>`).join('');
     }
 }
 
@@ -279,83 +214,122 @@ function updateCategoryDropdowns() {
 
 function initApp() {
     setTimeout(hidePageLoader, 2000);
+    if (typeof firebase === 'undefined') return;
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
 
-    try {
-        if (typeof firebase !== 'undefined') {
-            firebase.initializeApp(firebaseConfig);
-            db = firebase.database();
+    // Fetch and sync channels
+    db.ref('links').on('value', snap => {
+        const data = snap.val();
+        channelsData = data ? Object.keys(data).map(k => ({ id: k, ...data[k] })) : [];
+        requestAnimationFrame(refreshUI);
+    });
+    db.ref('channels').on('value', snap => {
+        const data = snap.val();
+        if (data) {
+            const formatted = Object.keys(data).map(k => ({ id: k, ...data[k] }));
+            channelsData = [...channelsData, ...formatted];
+            requestAnimationFrame(refreshUI);
+        }
+    });
 
-            // Support both old 'links' and new 'channels' nodes
-            const fetchChannels = (nodeName) => {
-                db.ref(nodeName).on('value', snap => {
-                    const data = snap.val();
-                    if (data) {
-                        const formatted = Object.keys(data).map(k => ({ id: k, ...data[k] }));
-                        // Merge or replace based on logic (here we update global channelsData)
-                        channelsData = formatted;
-                        requestAnimationFrame(refreshUI);
-                    }
-                });
-            };
-
-            // Try reading from 'links' first to restore data, then 'channels'
-            db.ref('links').once('value', s => {
-                if (s.val()) fetchChannels('links');
-                else fetchChannels('channels');
-            });
-
-            db.ref('categories').on('value', snap => {
-                const data = snap.val();
-                if (data) {
-                    // If data is an object (from push), convert to array. If already array, use it.
-                    categoriesData = Array.isArray(data) ? data : Object.values(data);
-                    requestAnimationFrame(refreshUI);
+    // Sync categories (new structure)
+    db.ref('categories_ordered').on('value', snap => {
+        const data = snap.val();
+        if (data) {
+            categoriesData = Object.keys(data).map(k => ({ id: k, ...data[k] }));
+        } else {
+            // Fallback to old format
+            db.ref('categories').once('value', oldSnap => {
+                const oldData = oldSnap.val();
+                if (oldData) {
+                    const arr = Array.isArray(oldData) ? oldData : Object.values(oldData);
+                    arr.forEach((name, i) => db.ref('categories_ordered').push({ name, order: i }));
+                    db.ref('categories').remove(); // Clean up old
                 }
             });
-
-            db.ref('visitor_count').on('value', s => {
-                const el = document.getElementById('visitor-count');
-                const count = s.val() || 0;
-                if (el) el.textContent = count.toLocaleString();
-            });
-
-            if (!sessionStorage.getItem('counted_vfinal')) {
-                db.ref('visitor_count').transaction(c => (c || 0) + 1);
-                sessionStorage.setItem('counted_vfinal', 'true');
-            }
         }
-    } catch (e) {
-        hidePageLoader();
+        requestAnimationFrame(refreshUI);
+    });
+
+    db.ref('visitor_count').on('value', s => {
+        const el = document.getElementById('visitor-count');
+        if (el) el.textContent = (s.val() || 0).toLocaleString();
+    });
+
+    if (!sessionStorage.getItem('counted_vfinal')) {
+        db.ref('visitor_count').transaction(c => (c || 0) + 1);
+        sessionStorage.setItem('counted_vfinal', 'true');
     }
 }
 
-// --- 5. INTERACTION & MEDIA (Same as before but stable) ---
+// --- 6. ACTIONS ---
 
-function playStream(url, name, forceProtection = false, category = "") {
+window.updateCategoryOrder = (id, newOrder) => {
+    if (db && id) db.ref('categories_ordered').child(id).update({ order: parseInt(newOrder) || 0 });
+};
+
+window.addNewCategory = () => {
+    const input = document.getElementById('new-cat-name');
+    const name = input.value.trim();
+    if (name && db) {
+        const maxOrder = categoriesData.length > 0 ? Math.max(...categoriesData.map(c => c.order || 0)) : -1;
+        db.ref('categories_ordered').push({ name, order: maxOrder + 1 }).then(() => {
+            input.value = '';
+            showToast("✅ تم إضافة القسم");
+        });
+    }
+};
+
+window.editCategory = (id, oldName) => {
+    const newName = prompt("الاسم الجديد:", oldName);
+    if (newName && newName.trim() !== "" && db) {
+        db.ref('categories_ordered').child(id).update({ name: newName.trim() });
+    }
+};
+
+window.deleteCategory = (id) => {
+    if (confirm("مسح القسم؟") && db) db.ref('categories_ordered').child(id).remove();
+};
+
+window.updateChannelInfo = (id) => {
+    const name = document.getElementById(`edit-name-${id}`).value.trim();
+    const url = document.getElementById(`edit-url-${id}`).value.trim();
+    const cat = document.getElementById(`edit-cat-${id}`).value;
+    const forceProtection = document.getElementById(`edit-protection-${id}`).checked;
+    if (db) {
+        db.ref('links').child(id).once('value', s => {
+            const node = s.val() ? 'links' : 'channels';
+            db.ref(node).child(id).update({ name, url, category: cat, forceProtection });
+            showToast("✅ تم الحفظ");
+        });
+    }
+};
+
+window.deleteChannel = (id) => {
+    if (confirm("مسح؟") && db) {
+        db.ref('links').child(id).remove();
+        db.ref('channels').child(id).remove();
+    }
+};
+
+function playStream(url, name, forceProtection, category) {
     activeStreamId++;
     const container = document.getElementById('video-container');
     const titleLabel = document.getElementById('now-playing-title');
     if (!container || !titleLabel) return;
-
-    titleLabel.innerHTML = category ? `<span class="np-cat">${category}</span> ${name}` : name;
+    titleLabel.innerHTML = `<span class="np-cat">${category}</span> ${name}`;
     container.innerHTML = '<div class="premium-loader"></div>';
 
     const cleanUrl = url.trim();
-    // Auto-detect Mixed Content (HTTP on HTTPS site)
     const isMixedContent = window.location.protocol === 'https:' && cleanUrl.startsWith('http:');
 
     if (forceProtection || isMixedContent) {
         container.innerHTML = `
-            <div class="protection-warning" style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:20px; padding:30px; text-align:center; height:100%; background:radial-gradient(circle, rgba(0,243,255,0.05) 0%, rgba(0,0,0,0.8) 100%);">
+            <div class="protection-warning" style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:20px; padding:30px; text-align:center; height:100%;">
                 <div style="font-size:40px;">🛡️</div>
-                <div class="protection-title" style="font-size:16px; line-height:1.6;">
-                    <span class="highlight-gold" style="font-size:20px; display:block; margin-bottom:10px;">نظام الحماية الذكي</span>
-                    بسبب قيود المتصفح على الروابط غير المشفرة،<br>يرجى تشغيل البث في نافذة مستقلة للمشاهدة بأعلى جودة.
-                </div>
-                <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
-                    <button class="btn-launch" style="padding:12px 30px; background:var(--primary-color); color:#000; font-weight:bold;" onclick="window.open('${cleanUrl}', '_blank')">▶ تشغيل الآن</button>
-                    <button class="btn-launch" style="padding:12px 30px; background:rgba(255,255,255,0.1); border:1px solid #555;" onclick="navigator.clipboard.writeText('${cleanUrl}').then(()=>showToast('✅ تم نسخ رابط البث لفتحه في VLC'))">🔗 نسخ الرابط لـ VLC</button>
-                </div>
+                <div class="protection-title">نظام الحماية الذكي<br><span style="font-size:12px; color:#888;">يرجى فتح البث في نافذة مستقلة</span></div>
+                <button class="btn-launch" onclick="window.open('${cleanUrl}', '_blank')">▶ تشغيل الآن</button>
             </div>
         `;
         return;
@@ -374,69 +348,10 @@ function playStream(url, name, forceProtection = false, category = "") {
 
     if (cleanUrl.includes('.m3u8') && typeof Hls !== 'undefined') {
         const hls = new Hls(); hls.loadSource(cleanUrl); hls.attachMedia(media);
-    } else if (cleanUrl.includes('.mpd') && typeof shaka !== 'undefined') {
-        const p = new shaka.Player(media); p.load(cleanUrl);
     } else {
         media.src = cleanUrl;
     }
 }
-
-// --- 6. ACTIONS (Reorder Categories) ---
-
-window.moveCategory = (index, direction) => {
-    const newIndex = index + direction;
-    if (newIndex < 0 || newIndex >= categoriesData.length) return;
-
-    // Swap elements
-    const temp = categoriesData[index];
-    categoriesData[index] = categoriesData[newIndex];
-    categoriesData[newIndex] = temp;
-
-    // Save the entire array back to Firebase
-    if (db) db.ref('categories').set(categoriesData);
-};
-
-window.addNewCategory = () => {
-    const input = document.getElementById('new-cat-name');
-    const name = input.value.trim();
-    if (name && db) {
-        const newCats = [...categoriesData, name];
-        db.ref('categories').set(newCats).then(() => {
-            input.value = '';
-            showToast("✅ تم إضافة القسم بنجاح");
-        });
-    }
-};
-
-window.deleteCategory = (name) => {
-    if (name === "عام" || !db) return;
-    if (confirm(`مسح قسم ${name}؟`)) {
-        const newCats = categoriesData.filter(c => c !== name);
-        db.ref('categories').set(newCats);
-    }
-};
-
-window.updateChannelInfo = (id) => {
-    const name = document.getElementById(`edit-name-${id}`).value.trim();
-    const url = document.getElementById(`edit-url-${id}`).value.trim();
-    const cat = document.getElementById(`edit-cat-${id}`).value;
-    const forceProtection = document.getElementById(`edit-protection-${id}`).checked;
-    if (db && id) {
-        // Update either in 'links' or 'channels' depending on where we found it
-        db.ref('links').child(id).once('value', s => {
-            const path = s.val() ? 'links' : 'channels';
-            db.ref(path).child(id).update({ name, url, category: cat, forceProtection });
-        });
-    }
-};
-
-window.deleteChannel = (id) => {
-    if (!id || !confirm("⚠️ مسح القناة؟")) return;
-    if (db) {
-        db.ref('links').child(id).remove();
-        db.ref('channels').child(id).remove();
-    }
-};
 
 initApp();
 
@@ -449,13 +364,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const u = document.getElementById('link-url').value.trim();
             const c = document.getElementById('link-category').value;
             const p = document.getElementById('link-protection').checked;
-            // Always push to 'channels' now
             if (db && n && u) {
                 db.ref('channels').push({ name: n, url: u, category: c, forceProtection: p, timestamp: Date.now() })
-                    .then(() => {
-                        form.reset();
-                        showToast("✅ تم إضافة القناة بنجاح");
-                    });
+                    .then(() => { form.reset(); showToast("✅ تم الإضافة"); });
             }
         };
     }
