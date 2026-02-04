@@ -53,14 +53,12 @@ function showToast(message, isError = false) {
     `;
     toast.textContent = message;
     document.body.appendChild(toast);
-    const style = document.createElement('style');
-    style.innerHTML = `@keyframes toast-in { from { bottom: -50px; opacity: 0; } to { bottom: 30px; opacity: 1; } }`;
-    document.head.appendChild(style);
+
     setTimeout(() => {
         toast.style.opacity = '0';
         toast.style.transition = 'opacity 0.5s ease-out';
         setTimeout(() => toast.remove(), 500);
-    }, 3000);
+    }, 2500);
 }
 
 // --- 3. RENDERING ENGINE ---
@@ -73,7 +71,11 @@ function renderChannels() {
     const grid = document.getElementById('channels-list');
     if (!grid) return;
     if (channelsData.length === 0) {
-        grid.innerHTML = '<div class="premium-loader"></div>';
+        grid.innerHTML = `
+            <div class="luxury-loading-wrap">
+                <div class="premium-loader"></div>
+                <div class="loading-msg">جاري تحميل قائمة القنوات...</div>
+            </div>`;
         return;
     }
 
@@ -102,7 +104,7 @@ function renderChannels() {
                 const item = document.createElement('div');
                 item.className = 'channel-item';
                 item.innerHTML = `<div class="channel-name">${ch.name}</div><div class="play-icon">▶</div>`;
-                item.onclick = () => playStream(ch.url, ch.name, ch.forceProtection, cat);
+                item.onclick = () => playStream(ch.url, ch.name, ch.forceProtection, cat, ch.forceAudio);
                 listDiv.appendChild(item);
             });
             groupDiv.appendChild(listDiv);
@@ -152,18 +154,22 @@ function renderAdminList(filterQuery = "") {
 
                 const safeId = String(link.id);
                 div.innerHTML = `
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+                    <div class="admin-item-grid">
                         <input type="text" id="edit-name-${safeId}" value="${link.name}" class="form-control" placeholder="اسم القناة">
-                        <select id="edit-cat-${safeId}" class="form-control" style="background:#000; color:#fff;">
+                        <select id="edit-cat-${safeId}" class="form-control admin-cat-select">
                             ${orderedCats.map(c => `<option value="${c}" ${c === cat ? 'selected' : ''}>${c}</option>`).join('')}
                         </select>
                     </div>
-                    <textarea id="edit-url-${safeId}" class="form-control" style="height:50px; width:100%; margin-bottom:10px;">${link.url}</textarea>
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <label style="font-size:11px; color:#00f3ff;"><input type="checkbox" id="edit-protection-${safeId}" ${link.forceProtection ? 'checked' : ''}> حماية</label>
-                        <div style="display:flex; gap:5px;">
-                            <button class="btn btn-primary" style="padding:5px 15px;" onclick="window.updateChannelInfo('${safeId}')">حفظ</button>
-                            <button class="btn btn-danger" style="padding:5px 15px;" onclick="window.deleteChannel('${safeId}')">حذف</button>
+                    <div class="admin-item-actions">
+                        <label class="admin-protection-row">
+                            <input type="checkbox" id="edit-protection-${safeId}" ${link.forceProtection ? 'checked' : ''}> تفعيل نظام الحماية
+                        </label>
+                        <label class="admin-protection-row" style="color:var(--secondary-color);">
+                            <input type="checkbox" id="edit-audio-${safeId}" ${link.forceAudio ? 'checked' : ''}> مشغل موسيقي فاخر
+                        </label>
+                        <div class="admin-btn-grid">
+                            <button class="btn btn-primary btn-save-full" onclick="window.updateChannelInfo('${safeId}')">💾 حفظ</button>
+                            <button class="btn btn-danger btn-delete-full" onclick="window.deleteChannel('${safeId}')">🗑️ حذف</button>
                         </div>
                     </div>
                 `;
@@ -241,7 +247,10 @@ function initApp() {
 // --- 6. ACTIONS ---
 
 window.updateCategoryOrder = (id, newOrder) => {
-    if (db && id) db.ref('categories_ordered').child(id).update({ order: parseInt(newOrder) || 0 });
+    if (db && id) {
+        db.ref('categories_ordered').child(id).update({ order: parseInt(newOrder) || 0 })
+            .then(() => showToast("✅ تم تحديث الترتيب بنجاح"));
+    }
 };
 
 window.addNewCategory = () => {
@@ -251,7 +260,7 @@ window.addNewCategory = () => {
         const maxOrder = categoriesData.length > 0 ? Math.max(...categoriesData.map(c => c.order || 0)) : -1;
         db.ref('categories_ordered').push({ name, order: maxOrder + 1 }).then(() => {
             input.value = '';
-            showToast("✅ تم إضافة القسم");
+            showToast("✅ تم إضافة القسم بنجاح");
         });
     }
 };
@@ -259,12 +268,16 @@ window.addNewCategory = () => {
 window.editCategory = (id, oldName) => {
     const newName = prompt("الاسم الجديد:", oldName);
     if (newName && newName.trim() !== "" && db) {
-        db.ref('categories_ordered').child(id).update({ name: newName.trim() });
+        db.ref('categories_ordered').child(id).update({ name: newName.trim() })
+            .then(() => showToast("✅ تم تعديل الاسم بنجاح"));
     }
 };
 
 window.deleteCategory = (id) => {
-    if (confirm("مسح القسم؟") && db) db.ref('categories_ordered').child(id).remove();
+    if (confirm("هل أنت متأكد من حذف هذا القسم؟") && db) {
+        db.ref('categories_ordered').child(id).remove()
+            .then(() => showToast("🗑️ تم حذف القسم بنجاح"));
+    }
 };
 
 window.updateChannelInfo = (id) => {
@@ -272,47 +285,297 @@ window.updateChannelInfo = (id) => {
     const url = document.getElementById(`edit-url-${id}`).value.trim();
     const cat = document.getElementById(`edit-cat-${id}`).value;
     const forceProtection = document.getElementById(`edit-protection-${id}`).checked;
+    const forceAudio = document.getElementById(`edit-audio-${id}`).checked;
     if (db) {
         db.ref('links').child(id).once('value', s => {
             const node = s.val() ? 'links' : 'channels';
-            db.ref(node).child(id).update({ name, url, category: cat, forceProtection });
-            showToast("✅ تم الحفظ");
+            db.ref(node).child(id).update({ name, url, category: cat, forceProtection, forceAudio })
+                .then(() => showToast("✅ تم حفظ التعديلات بنجاح"));
         });
     }
 };
 
 window.deleteChannel = (id) => {
-    if (confirm("مسح؟") && db) {
+    if (confirm("هل أنت متأكد من حذف هذه القناة؟") && db) {
         db.ref('links').child(id).remove();
-        db.ref('channels').child(id).remove();
+        db.ref('channels').child(id).remove()
+            .then(() => showToast("🗑️ تم حذف القناة بنجاح"));
     }
 };
 
-function playStream(url, name, forceProtection, category) {
+function getYouTubeId(url) {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+}
+
+function playStream(url, name, forceProtection, category, forceAudio = false) {
     activeStreamId++;
     const container = document.getElementById('video-container');
     const titleLabel = document.getElementById('now-playing-title');
     if (!container || !titleLabel) return;
-    titleLabel.innerHTML = `<span class="np-cat">${category}</span> ${name}`;
-    container.innerHTML = '<div class="premium-loader"></div>';
+
     const cleanUrl = url.trim();
+    container.classList.remove('iframe-mode');
+
+    // Extract URL if it's an iframe string
+    let externalUrl = cleanUrl;
+    if (cleanUrl.toLowerCase().includes('<iframe')) {
+        const match = cleanUrl.match(/src=["']([^"']+)["']/i);
+        if (match) externalUrl = match[1];
+    }
+
+    // Restore original title format with an external button
+    titleLabel.innerHTML = `
+        <div class="playing-title-wrap">
+            <span class="np-cat">${category}</span> ${name}
+            <button class="btn-external-player" onclick="window.open('${externalUrl}', '_blank')">فتح في نافذة مستقلة ▶</button>
+        </div>
+    `;
+
+    container.innerHTML = `
+        <div class="luxury-loading-wrap">
+            <div class="premium-loader"></div>
+            <div class="loading-msg">جاري فحص وتجهيز البث الآمن...</div>
+        </div>`;
+
     const isMixedContent = window.location.protocol === 'https:' && cleanUrl.startsWith('http:');
     if (forceProtection || isMixedContent) {
-        container.innerHTML = `<div class="protection-warning" style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:20px; padding:30px; text-align:center; height:100%;"><div style="font-size:40px;">🛡️</div><div class="protection-title">نظام الحماية الذكي<br><span style="font-size:12px; color:#888;">يرجى فتح البث في نافذة مستقلة</span></div><button class="btn-launch" onclick="window.open('${cleanUrl}', '_blank')">▶ تشغيل الآن</button></div>`;
+        container.innerHTML = `
+            <div class="protection-warning">
+                <div class="luxury-bg-glow"></div>
+                <div class="protection-content-wrap" style="gap: 0;">
+                    <div class="gold-shield-icon" style="filter: sepia(100%) saturate(1000%) hue-rotate(5deg) brightness(1.2) drop-shadow(0 0 10px rgba(212,175,55,0.7)); font-size: 45px; margin: 0 0 5px 0;">🛡️</div>
+                    <div class="protection-title" style="font-size:14px; line-height:1.4; color:#D4AF37; text-shadow:0 0 8px rgba(212,175,55,0.4); font-weight:bold; margin: 0; padding:0;">
+                        تم تفعيل نظام الحماية لمنع الموقع من الحظر<br>
+                        <span style="font-size:11px; color:#ccc; font-weight:normal;">يمكنك الاستماع من السيرفر مباشرة</span>
+                    </div>
+                    <button class="btn-launch" style="padding:12px 50px; font-size:16px; background:linear-gradient(45deg, #FFD700, #D4AF37); color:#000; border:none; box-shadow:0 4px 15px rgba(212,175,55,0.5); font-weight:bold; border-radius:10px; cursor:pointer; margin-bottom: 20px; margin-top: 5px;" onclick="window.open('${externalUrl}', '_blank')">اضغط هنا</button>
+                </div>
+            </div>`;
         return;
     }
+
+    // 1. YouTube Handler (Fix)
+    const ytId = getYouTubeId(cleanUrl);
+    if (ytId) {
+        container.innerHTML = `
+            <iframe 
+                src="https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowfullscreen 
+                style="width: 100%; height: 100%; border: none;">
+            </iframe>`;
+        return;
+    }
+
+    // 2. Vidora & Movie Site Handler
+    if (cleanUrl.includes('vidora.su')) {
+        container.classList.add('iframe-mode');
+        container.innerHTML = `
+            <iframe 
+                src="${cleanUrl}" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowfullscreen 
+                style="width: 100%; height: 100%; border: none;">
+            </iframe>`;
+        return;
+    }
+
+    // 3. Generic Iframe Handler
     if (cleanUrl.toLowerCase().startsWith('<iframe')) {
+        container.classList.add('iframe-mode');
         container.innerHTML = cleanUrl;
         const ifr = container.querySelector('iframe');
         if (ifr) { ifr.style.width = '100%'; ifr.style.height = '100%'; ifr.style.border = 'none'; }
         return;
     }
-    const media = document.createElement(cleanUrl.match(/\.(mp3|wav|aac|m4a)(\?.*)?$/i) ? 'audio' : 'video');
-    media.controls = true; media.autoplay = true; media.style.width = '100%'; media.style.height = '100%';
-    container.innerHTML = ''; container.appendChild(media);
+
+    // 3. Audio Handler (Premium Look - PC & Mobile)
+    const isAudioExt = cleanUrl.match(/\.(mp3|wav|aac|m4a|ogg|opus|flac)(\?.*)?$/i);
+    const audioKeywords = ["اغاني", "موسيقى", "music", "audio", "radio", "راديو", "قرآن", "quran", "استماع", "صوت", "تلاوة", "إذاعة", "fm", "station", "بث", "صوتي", "تلاوات", "اناشيد", "أناشيد"];
+    const lowerName = (name || "").toLowerCase();
+    const lowerCat = (category || "").toLowerCase();
+    const isAudioCat = audioKeywords.some(key => lowerCat.includes(key) || lowerName.includes(key));
+
+    if (forceAudio || isAudioExt || isAudioCat) {
+        container.style.display = 'block';
+        container.style.background = '#000';
+        container.style.height = '0';
+
+        container.innerHTML = `
+            <div class="audio-experience-wrapper" id="audio-wrapper">
+                <div class="audio-card">
+                    <div class="audio-header">
+                        <span class="luxury-badge">PREMIUM AUDIO</span>
+                        <div class="audio-visualizer-mini">
+                            <span></span><span></span><span></span><span></span>
+                        </div>
+                    </div>
+                    
+                    <div class="audio-disk-wrap">
+                        <div class="audio-disk" id="audio-disk">
+                            <div class="disk-center"></div>
+                        </div>
+                        <div class="audio-glow"></div>
+                    </div>
+
+                    <div class="audio-info">
+                        <h2 class="audio-track-name">${name}</h2>
+                        <p class="audio-artist-name">${category}</p>
+                    </div>
+
+                    <div class="audio-controls-custom">
+                        <div class="progress-container" id="audio-seek-bar">
+                            <div class="progress-bar" id="audio-progress"></div>
+                        </div>
+                        <div class="time-info">
+                            <span id="curr-time">00:00</span>
+                            <span id="total-time">00:00</span>
+                        </div>
+                        <div class="main-btns">
+                            <button class="btn-audio-circle" id="audio-toggle-btn">
+                                <span class="icon-play" id="audio-icon-state">▶</span>
+                            </button>
+                        </div>
+                        <div class="volume-box">
+                            <span class="volume-icon">🔊</span>
+                            <input type="range" class="volume-slider" id="audio-vol-control" min="0" max="1" step="0.05" value="1">
+                        </div>
+                    </div>
+                    
+                    <audio id="main-audio-player" autoplay>
+                        <source src="${cleanUrl}" type="${isAudioExt ? 'audio/mpeg' : 'application/x-mpegURL'}">
+                    </audio>
+                </div>
+            </div>
+        `;
+
+        const player = document.getElementById('main-audio-player');
+        const wrapper = document.getElementById('audio-wrapper');
+        const toggleBtn = document.getElementById('audio-toggle-btn');
+        const iconState = document.getElementById('audio-icon-state');
+        const prog = document.getElementById('audio-progress');
+        const seekBar = document.getElementById('audio-seek-bar');
+        const currTimeEl = document.getElementById('curr-time');
+        const totalTimeEl = document.getElementById('total-time');
+        const volSlider = document.getElementById('audio-vol-control');
+
+        function formatTime(s) {
+            if (isNaN(s) || !isFinite(s)) return "00:00";
+            const m = Math.floor(s / 60);
+            const sec = Math.floor(s % 60);
+            return `${m < 10 ? '0' : ''}${m}:${sec < 10 ? '0' : ''}${sec}`;
+        }
+
+        // HLS Support for Audio
+        if (cleanUrl.includes('.m3u8') && typeof Hls !== 'undefined') {
+            if (Hls.isSupported()) {
+                const hls = new Hls();
+                hls.loadSource(cleanUrl);
+                hls.attachMedia(player);
+            } else if (player.canPlayType('application/vnd.apple.mpegurl')) {
+                player.src = cleanUrl;
+            }
+        } else {
+            player.src = cleanUrl;
+        }
+
+        player.onplay = () => {
+            wrapper.classList.add('playing');
+            iconState.textContent = '⏸';
+        };
+
+        player.onpause = () => {
+            wrapper.classList.remove('playing');
+            iconState.textContent = '▶';
+        };
+
+        toggleBtn.onclick = () => {
+            if (player.paused) player.play();
+            else player.pause();
+        };
+
+        player.ontimeupdate = () => {
+            if (player.duration) {
+                const p = (player.currentTime / player.duration) * 100;
+                prog.style.width = p + '%';
+            }
+            currTimeEl.textContent = formatTime(player.currentTime);
+        };
+
+        player.onloadedmetadata = () => {
+            totalTimeEl.textContent = formatTime(player.duration);
+        };
+
+        seekBar.onclick = (e) => {
+            const rect = seekBar.getBoundingClientRect();
+            const pos = (e.clientX - rect.left) / rect.width;
+            if (player.duration) player.currentTime = pos * player.duration;
+        };
+
+        volSlider.oninput = (e) => {
+            player.volume = e.target.value;
+        };
+
+        return;
+    }
+
+    // 4. Standard Video/M3U8 Handler (Added better error handling for Movies)
+    const media = document.createElement('video');
+    media.controls = true;
+    media.autoplay = true;
+    media.style.width = '100%';
+    media.style.height = '100%';
+    media.style.backgroundColor = '#000';
+
+    // Add event listeners for errors (Fix for Foreign Movies)
+    media.onerror = () => {
+        console.error("Video Error Detected. Redirecting to protection mode...");
+        container.innerHTML = `
+            <div class="protection-warning">
+                <div class="luxury-bg-glow"></div>
+                <div class="protection-content-wrap" style="gap: 0;">
+                    <div class="gold-shield-icon" style="filter: sepia(100%) saturate(1000%) hue-rotate(5deg) brightness(1.2) drop-shadow(0 0 10px rgba(212,175,55,0.7)); font-size: 35px; margin: 0 0 5px 0;">🛡️</div>
+                    <div class="protection-title" style="font-size:13px; line-height:1.3; color:#D4AF37; text-shadow:0 0 8px rgba(212,175,55,0.4); font-weight:bold; margin: 0; padding:0;">
+                        تم تفعيل نظام الحماية لمنع الموقع من الحظر<br>
+                        <span style="font-size:10px; color:#ccc; font-weight:normal;">يمكنك الاستماع من السيرفر مباشرة</span>
+                    </div>
+                    <button class="btn-launch" style="padding:10px 40px; font-size:15px; background:linear-gradient(45deg, #FFD700, #D4AF37); color:#000; border:none; box-shadow:0 4px 12px rgba(212,175,55,0.4); font-weight:bold; border-radius:8px; cursor:pointer; margin-bottom: 15px; margin-top: 5px;" onclick="window.open('${externalUrl}', '_blank')">اضغط هنا</button>
+                </div>
+            </div>`;
+    };
+
+    // Reset container styles for video
+    container.style.display = 'block';
+    container.style.background = '#111';
+
+    container.innerHTML = '';
+    container.appendChild(media);
+
     if (cleanUrl.includes('.m3u8') && typeof Hls !== 'undefined') {
-        const hls = new Hls(); hls.loadSource(cleanUrl); hls.attachMedia(media);
-    } else { media.src = cleanUrl; }
+        if (Hls.isSupported()) {
+            const hls = new Hls();
+            hls.loadSource(cleanUrl);
+            hls.attachMedia(media);
+            hls.on(Hls.Events.ERROR, function (event, data) {
+                if (data.fatal) { media.src = cleanUrl; } // Fallback to native
+            });
+        } else if (media.canPlayType('application/vnd.apple.mpegurl')) {
+            media.src = cleanUrl;
+        }
+    } else if ((cleanUrl.includes('.ts') || cleanUrl.includes('.flv')) && typeof mpegts !== 'undefined') {
+        if (mpegts.getFeatureList().mseLivePlayback) {
+            const player = mpegts.createPlayer({ type: cleanUrl.includes('.flv') ? 'flv' : 'mse', url: cleanUrl });
+            player.attachMediaElement(media);
+            player.load();
+            player.play();
+        } else {
+            media.src = cleanUrl;
+        }
+    } else {
+        media.src = cleanUrl;
+    }
 }
 
 initApp();
@@ -326,8 +589,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const u = document.getElementById('link-url').value.trim();
             const c = document.getElementById('link-category').value;
             const p = document.getElementById('link-protection').checked;
+            const fa = document.getElementById('link-force-audio').checked;
             if (db && n && u) {
-                db.ref('channels').push({ name: n, url: u, category: c, forceProtection: p, timestamp: Date.now() })
+                db.ref('channels').push({ name: n, url: u, category: c, forceProtection: p, forceAudio: fa, timestamp: Date.now() })
                     .then(() => { form.reset(); showToast("✅ تم الإضافة"); });
             }
         };

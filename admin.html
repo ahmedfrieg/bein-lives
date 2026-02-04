@@ -74,10 +74,18 @@
                 </div>
 
                 <div class="form-group"
-                    style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 5px;">
+                    style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
                     <input type="checkbox" id="link-protection" style="width: 20px; height: 20px;">
                     <label for="link-protection" style="margin: 0; cursor: pointer;">إظهار رسالة 'نظام الحماية' بدلاً من
                         الفيديو (Hide Video)</label>
+                </div>
+
+                <div class="form-group"
+                    style="display: flex; align-items: center; gap: 10px; background: rgba(0, 243, 255, 0.05); padding: 10px; border-radius: 5px;">
+                    <input type="checkbox" id="link-force-audio" style="width: 20px; height: 20px;">
+                    <label for="link-force-audio"
+                        style="margin: 0; cursor: pointer; color: var(--primary-color); font-weight: bold;">تشغيل كمشغل
+                        موسيقي فاخر (Force Luxury Audio Player)</label>
                 </div>
 
                 <button type="submit" class="btn btn-primary" style="width: 100%;">إضافة للموقع</button>
@@ -100,7 +108,8 @@
         <div class="admin-panel" style="margin-top: 30px;">
             <h2 style="color: #ff3333; margin-bottom: 25px;">إدارة القنوات الحالية</h2>
             <div class="form-group" style="display: flex; gap: 10px; margin-bottom: 20px;">
-                <input type="text" id="admin-search-input" class="form-control" placeholder="🔍 ابحث عن اسم القناة..." onkeyup="if(event.key === 'Enter') searchAdminChannels()">
+                <input type="text" id="admin-search-input" class="form-control" placeholder="🔍 ابحث عن اسم القناة..."
+                    onkeyup="if(event.key === 'Enter') searchAdminChannels()">
                 <button onclick="searchAdminChannels()" class="btn btn-primary">بحث</button>
             </div>
             <div id="admin-link-list" class="admin-list">
