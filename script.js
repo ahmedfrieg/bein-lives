@@ -595,29 +595,30 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
 
     // 0. Facebook Handler (Priority)
     if (srcUrl.includes('facebook.com') || srcUrl.includes('fb.watch')) {
-        // Special Handling for pre-made Facebook Plugin codes (prevent double-wrapping)
-        if (srcUrl.includes('/plugins/video.php')) {
-            container.classList.add('iframe-mode');
-            container.innerHTML = isHtmlEmbed ? rawInput : `
-                <iframe 
-                    src="${srcUrl}" 
-                    width="100%" 
-                    height="100%" 
-                    style="border:none; overflow:hidden;" 
-                    scrolling="no" 
-                    frameborder="0" 
-                    allowfullscreen="true" 
-                    allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share">
-                </iframe>`;
+        let cleanUrl = srcUrl;
 
-            // Force responsive style
-            const ifr = container.querySelector('iframe');
-            if (ifr) { ifr.style.width = '100%'; ifr.style.height = '100%'; }
-            return;
+        // Special Handling: If input is already a 'plugins/video.php' link/iframe
+        // We extract the REAL video URL from the 'href' parameter to regenerate a clean, full-width iframe.
+        // This fixes issues with fixed-width user codes or malformed parameters.
+        if (srcUrl.includes('/plugins/video.php')) {
+            try {
+                // Creates a dummy URL object to parse params easily
+                // We handle cases where the user pasted a raw iframe string by using the extracted srcUrl
+                const tempUrl = new URL(srcUrl.replace(/&amp;/g, '&'));
+                const extractedHref = tempUrl.searchParams.get('href');
+                if (extractedHref) {
+                    cleanUrl = decodeURIComponent(extractedHref);
+                }
+            } catch (e) {
+                // Fallback extraction if URL parsing fails
+                const match = srcUrl.match(/href=([^&"']+)/);
+                if (match) {
+                    cleanUrl = decodeURIComponent(match[1]);
+                }
+            }
         }
 
-        let cleanUrl = srcUrl;
-        // Convert Reel URL to Watch URL for better compatibility with the Embed Plugin
+        // Convert Reel URL to Watch URL for better compatibility
         if (cleanUrl.includes('/reel/')) {
             const reelIdMatch = cleanUrl.match(/\/reel\/(\d+)/);
             if (reelIdMatch && reelIdMatch[1]) {
