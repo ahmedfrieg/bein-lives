@@ -594,8 +594,28 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
     // --- LOGIC: VIDEO HANDLER ---
 
     // 0. Facebook Handler (Priority)
-    // 0. Facebook Handler (Priority)
     if (srcUrl.includes('facebook.com') || srcUrl.includes('fb.watch')) {
+        // Special Handling for pre-made Facebook Plugin codes (prevent double-wrapping)
+        if (srcUrl.includes('/plugins/video.php')) {
+            container.classList.add('iframe-mode');
+            container.innerHTML = isHtmlEmbed ? rawInput : `
+                <iframe 
+                    src="${srcUrl}" 
+                    width="100%" 
+                    height="100%" 
+                    style="border:none; overflow:hidden;" 
+                    scrolling="no" 
+                    frameborder="0" 
+                    allowfullscreen="true" 
+                    allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share">
+                </iframe>`;
+
+            // Force responsive style
+            const ifr = container.querySelector('iframe');
+            if (ifr) { ifr.style.width = '100%'; ifr.style.height = '100%'; }
+            return;
+        }
+
         let cleanUrl = srcUrl;
         // Convert Reel URL to Watch URL for better compatibility with the Embed Plugin
         if (cleanUrl.includes('/reel/')) {
