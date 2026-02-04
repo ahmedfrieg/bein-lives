@@ -593,47 +593,32 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
 
     // --- LOGIC: VIDEO HANDLER ---
 
-    // 0. Facebook Handler (Priority)
-    if (srcUrl.includes('facebook.com') || srcUrl.includes('fb.watch')) {
-        // CASE A: User pasted a full HTML Embed Code (Trust the user's code)
-        if (isHtmlEmbed) {
-            container.classList.add('iframe-mode');
-            container.innerHTML = rawInput;
-
-            // Just ensure it fits the container
-            const ifr = container.querySelector('iframe');
-            if (ifr) {
-                ifr.style.width = '100%';
-                ifr.style.height = '100%';
-                ifr.removeAttribute('width');
-                ifr.removeAttribute('height');
-            }
-            return;
-        }
-
-        // CASE B: User pasted a URL (We must generate the embed code)
-        let cleanUrl = srcUrl;
+    // 0. Facebook Handler (Ultimate Robust Mode - Final)
+    if (srcUrl.includes('facebook.com') || srcUrl.includes('fb.watch') || srcUrl.includes('fb.com')) {
         let videoId = null;
 
-        // 1. Try to find ID in the URL directly
-        const idMatch = srcUrl.match(/(?:videos\/|reel\/|watch\/\?v=|vb\.\d+\/|v=|fbid=)(\d+)/);
-        if (idMatch && idMatch[1]) {
-            videoId = idMatch[1];
+        // 1. Aggressive ID Extraction: We search for the first string of 10+ digits
+        const idMatches = srcUrl.match(/(?:videos\/|reel\/|watch\/\?v=|v=|fbid=|watch\/|v\/)(\d{10,})/) || srcUrl.match(/\/(\d{10,})(?:\/|\?|$)/);
+
+        if (idMatches && idMatches[1]) {
+            videoId = idMatches[1];
         }
 
-        // 2. Construct the official Plugin URL using URL or ID
+        // 2. Clear Rebuild
+        let finalHref = srcUrl;
         if (videoId) {
-            // Robust canonical URL
-            cleanUrl = `https://www.facebook.com/video.php?v=${videoId}`;
+            finalHref = `https://www.facebook.com/watch/?v=${videoId}`;
         }
 
-        const encodedUrl = encodeURIComponent(cleanUrl);
+        const encodedHref = encodeURIComponent(finalHref);
+
+        container.classList.add('iframe-mode');
         container.innerHTML = `
             <iframe 
-                src="https://www.facebook.com/plugins/video.php?href=${encodedUrl}&show_text=0&t=0"
+                src="https://www.facebook.com/plugins/video.php?href=${encodedHref}&show_text=0&t=0&adapt_container_width=true"
                 width="100%" 
                 height="100%" 
-                style="border:none; overflow:hidden;" 
+                style="border:none; overflow:hidden; min-height:500px;" 
                 scrolling="no" 
                 frameborder="0" 
                 allowfullscreen="true" 
