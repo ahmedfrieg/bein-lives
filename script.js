@@ -86,9 +86,7 @@ function renderChannels() {
     });
 
     const orderedCats = getOrderedCategories();
-    // Add any cat from channels but not in categoriesData to the end
-    const existingCats = new Set(orderedCats);
-    Object.keys(groups).forEach(cat => { if (!existingCats.has(cat)) orderedCats.push(cat); });
+    // Strictly only use categories defined in categoriesData
 
     grid.innerHTML = '';
     orderedCats.forEach(cat => {
@@ -129,8 +127,6 @@ function renderAdminList(filterQuery = "") {
     });
 
     const orderedCats = getOrderedCategories();
-    const existingCats = new Set(orderedCats);
-    Object.keys(groups).forEach(cat => { if (!existingCats.has(cat)) orderedCats.push(cat); });
 
     orderedCats.forEach(cat => {
         const groupSection = document.createElement('div');
