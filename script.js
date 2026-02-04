@@ -595,35 +595,36 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
 
     // 0. Facebook Handler (Priority)
     if (srcUrl.includes('facebook.com') || srcUrl.includes('fb.watch')) {
-        let cleanUrl = srcUrl;
+        // CASE A: User pasted a full HTML Embed Code (Trust the user's code)
+        if (isHtmlEmbed) {
+            container.classList.add('iframe-mode');
+            container.innerHTML = rawInput;
 
-        // Special Handling: If input is already a 'plugins/video.php' link/iframe
-        // We extract the REAL video URL from the 'href' parameter to regenerate a clean, full-width iframe.
-        // This fixes issues with fixed-width user codes or malformed parameters.
-        if (srcUrl.includes('/plugins/video.php')) {
-            try {
-                // Creates a dummy URL object to parse params easily
-                // We handle cases where the user pasted a raw iframe string by using the extracted srcUrl
-                const tempUrl = new URL(srcUrl.replace(/&amp;/g, '&'));
-                const extractedHref = tempUrl.searchParams.get('href');
-                if (extractedHref) {
-                    cleanUrl = decodeURIComponent(extractedHref);
-                }
-            } catch (e) {
-                // Fallback extraction if URL parsing fails
-                const match = srcUrl.match(/href=([^&"']+)/);
-                if (match) {
-                    cleanUrl = decodeURIComponent(match[1]);
-                }
+            // Just ensure it fits the container
+            const ifr = container.querySelector('iframe');
+            if (ifr) {
+                ifr.style.width = '100%';
+                ifr.style.height = '100%';
+                ifr.removeAttribute('width');
+                ifr.removeAttribute('height');
             }
+            return;
         }
 
-        // Convert Reel URL to Watch URL for better compatibility
-        if (cleanUrl.includes('/reel/')) {
-            const reelIdMatch = cleanUrl.match(/\/reel\/(\d+)/);
-            if (reelIdMatch && reelIdMatch[1]) {
-                cleanUrl = `https://www.facebook.com/watch/?v=${reelIdMatch[1]}`;
-            }
+        // CASE B: User pasted a URL (We must generate the embed code)
+        let cleanUrl = srcUrl;
+        let videoId = null;
+
+        // 1. Try to find ID in the URL directly
+        const idMatch = srcUrl.match(/(?:videos\/|reel\/|watch\/\?v=|vb\.\d+\/|v=|fbid=)(\d+)/);
+        if (idMatch && idMatch[1]) {
+            videoId = idMatch[1];
+        }
+
+        // 2. Construct the official Plugin URL using URL or ID
+        if (videoId) {
+            // Robust canonical URL
+            cleanUrl = `https://www.facebook.com/video.php?v=${videoId}`;
         }
 
         const encodedUrl = encodeURIComponent(cleanUrl);
