@@ -378,7 +378,81 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
         return;
     }
 
-    // 1. Audio Handler Priority (If forced or detected)
+    // 1. Universal Audio Iframe Handler (Boomplay, SoundCloud, Spotify, etc.)
+    const isIframeCode = cleanUrl.toLowerCase().includes('<iframe');
+    let iframeEmbedUrl = cleanUrl;
+
+    // Extract iframe URL if it's a full iframe code
+    if (isIframeCode) {
+        const match = cleanUrl.match(/src=["']([^"']+)["']/i);
+        if (match) iframeEmbedUrl = match[1];
+    }
+
+    // Detect audio streaming platforms
+    const audioStreamingPlatforms = [
+        'boomplay.com', 'soundcloud.com', 'spotify.com', 'mixcloud.com',
+        'audiomack.com', 'anghami.com', 'deezer.com', 'tidal.com',
+        'bandcamp.com', 'reverbnation.com', 'hearthis.at'
+    ];
+
+    const isAudioPlatform = audioStreamingPlatforms.some(platform =>
+        iframeEmbedUrl.toLowerCase().includes(platform)
+    );
+
+    // Check if it's an audio iframe (forced by user OR detected platform)
+    if ((forceAudio || isAudioPlatform) && (isIframeCode || isAudioPlatform)) {
+        container.classList.add('audio-mode');
+        container.style.display = 'block';
+        container.style.background = '#000';
+        container.style.height = '0';
+
+        // Detect platform for badge
+        let platformBadge = '🎵 مشغل صوتي';
+        if (iframeEmbedUrl.includes('boomplay.com')) platformBadge = '🎵 Powered by Boomplay';
+        else if (iframeEmbedUrl.includes('soundcloud.com')) platformBadge = '🎵 Powered by SoundCloud';
+        else if (iframeEmbedUrl.includes('spotify.com')) platformBadge = '🎵 Powered by Spotify';
+        else if (iframeEmbedUrl.includes('anghami.com')) platformBadge = '🎵 Powered by Anghami';
+
+        container.innerHTML = `
+            <div class="royal-audio-hub boomplay-mode" id="audio-wrapper">
+                <div class="royal-player-card">
+                    <div class="royal-disk-section">
+                        <div class="royal-aura-glow"></div>
+                        <div class="royal-disk-container">
+                            <div class="royal-disk playing" id="audio-disk">
+                                <div class="royal-disk-center">
+                                    <div class="jewel-spark"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="royal-visualizer">
+                            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+                            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="royal-info-section">
+                        <h2 class="royal-track-name">${name}</h2>
+                        <span class="royal-track-category">${category}</span>
+                        <span class="boomplay-badge">${platformBadge}</span>
+                    </div>
+
+                    <div class="boomplay-iframe-container">
+                        <iframe 
+                            src="${iframeEmbedUrl}" 
+                            frameborder="0"
+                            allow="autoplay; encrypted-media"
+                            allowfullscreen
+                            style="width: 100%; height: 420px; border-radius: 15px; box-shadow: 0 0 30px rgba(0, 243, 255, 0.3);">
+                        </iframe>
+                    </div>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    // 2. Audio Handler Priority (If forced or detected - for direct audio files)
     const isAudioExt = cleanUrl.match(/\.(mp3|wav|aac|m4a|ogg|opus|flac)(\?.*)?$/i);
     const audioKeywords = ["اغاني", "موسيقى", "music", "audio", "radio", "راديو", "قرآن", "quran", "استماع", "صوت", "تلاوة", "إذاعة", "fm", "station", "بث", "صوتي", "تلاوات", "اناشيد", "أناشيد"];
     const lowerName = (name || "").toLowerCase();

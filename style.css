@@ -2175,3 +2175,85 @@ body {
         border-radius: 4px !important;
     }
 }
+
+/* =========================
+   Boomplay Audio Player Styles
+   ========================= */
+
+.royal-audio-hub.boomplay-mode {
+    height: auto !important;
+    position: relative !important;
+    padding: 30px 20px;
+}
+
+.royal-audio-hub.boomplay-mode .royal-player-card {
+    max-width: 600px;
+    width: 95%;
+    padding: 30px 25px;
+}
+
+.royal-audio-hub.boomplay-mode .royal-disk {
+    animation-play-state: running !important;
+}
+
+.boomplay-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #D4AF37 0%, #8A6D3B 100%);
+    color: #000;
+    padding: 6px 15px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    margin-top: 10px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 10px rgba(212, 175, 55, 0.3);
+}
+
+.boomplay-iframe-container {
+    width: 100%;
+    margin-top: 20px;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 0 30px rgba(0, 243, 255, 0.2);
+}
+
+.boomplay-iframe-container iframe {
+    display: block;
+    width: 100%;
+    min-height: 420px;
+}
+
+/* Mobile Adjustments for Boomplay Player */
+@media (max-width: 768px) {
+    .royal-audio-hub.boomplay-mode {
+        padding: 20px 10px;
+    }
+    
+    .royal-audio-hub.boomplay-mode .royal-player-card {
+        padding: 20px 15px;
+        max-width: 100%;
+    }
+    
+    .royal-audio-hub.boomplay-mode .royal-disk-section {
+        width: 100px;
+        height: 100px;
+        margin-bottom: 15px;
+    }
+    
+    .royal-track-name {
+        font-size: 0.9rem !important;
+    }
+    
+    .royal-track-category {
+        font-size: 0.65rem !important;
+    }
+    
+    .boomplay-badge {
+        font-size: 0.6rem;
+        padding: 4px 12px;
+    }
+    
+    .boomplay-iframe-container iframe {
+        min-height: 360px;
+    }
+}
