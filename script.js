@@ -12,7 +12,7 @@ const firebaseConfig = {
 
 let db;
 let channelsData = [];
-let categoriesData = []; // Storage: array of {id, name, order}
+let categoriesData = [];
 let activeStreamId = 0;
 
 // --- 2. GLOBAL UTILITIES ---
@@ -168,7 +168,7 @@ function renderAdminList(filterQuery = "") {
                             </div>
                             <div class="input-field">
                                 <label>رابط الفيديو/كود التضمين</label>
-                                <input type="text" id="edit-url-${safeId}" value="${link.url || ''}" class="form-control">
+                                <input type="text" id="edit-url-${safeId}" value="${(link.url || '').replace(/"/g, '&quot;')}" class="form-control">
                             </div>
                         </div>
                         
@@ -324,6 +324,7 @@ window.deleteChannel = (id) => {
 };
 
 function getYouTubeId(url) {
+    if (!url) return null;
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
     const match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
@@ -335,22 +336,37 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
     const titleLabel = document.getElementById('now-playing-title');
     if (!container || !titleLabel) return;
 
-    const cleanUrl = url.trim();
+    let rawInput = url.trim();
+    // Detect if input is HTML (starts with <)
+    // We treat anything starting with < as an "Embed Code"
+    const isHtmlEmbed = rawInput.startsWith('<');
+    const isIframeCode = rawInput.toLowerCase().includes('<iframe');
+
+    // Extract valid URL for Platform Detection / Links
+    // If it's an embed code, we try to fish out the 'src' to see if it triggers special handlers (like Boomplay or YouTube)
+    let srcUrl = rawInput;
+    if (isHtmlEmbed) {
+        // Try to find the src attribute if it exists
+        const match = rawInput.match(/src\s*=\s*["']([^"']+)["']/i);
+        if (match) {
+            srcUrl = match[1];
+        } else {
+            // If no src, try to find the first https link
+            const urlMatch = rawInput.match(/(https?:\/\/[^\s"']+)/);
+            if (urlMatch) srcUrl = urlMatch[1];
+        }
+    }
+    srcUrl = srcUrl.trim();
+
     container.classList.remove('iframe-mode');
 
-    // Extract URL if it's an iframe string
-    let externalUrl = cleanUrl;
-    if (cleanUrl.toLowerCase().includes('<iframe')) {
-        const match = cleanUrl.match(/src=["']([^"']+)["']/i);
-        if (match) externalUrl = match[1];
-    }
-
-    // Restore original title format with an external button and a Search Subtitles button
+    // Restore original title format with an external button
+    // If we couldn't extract a srcUrl (e.g. raw html with no link), open btn might break, but that's edge case.
     titleLabel.innerHTML = `
         <div class="playing-title-wrap">
             <span class="np-cat">${category}</span> ${name}
             <div class="player-action-btns">
-                <button class="btn-external-player" onclick="window.open('${externalUrl}', '_blank')">فتح في نافذة مستقلة ▶</button>
+                <button class="btn-external-player" onclick="window.open('${srcUrl}', '_blank')">فتح في نافذة مستقلة ▶</button>
             </div>
         </div>
     `;
@@ -361,7 +377,7 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
             <div class="loading-msg">جاري فحص وتجهيز البث الآمن...</div>
         </div>`;
 
-    const isMixedContent = window.location.protocol === 'https:' && cleanUrl.startsWith('http:');
+    const isMixedContent = window.location.protocol === 'https:' && srcUrl.startsWith('http:');
     if (forceProtection || isMixedContent) {
         container.innerHTML = `
             <div class="protection-warning">
@@ -372,224 +388,214 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
                         تم تفعيل نظام الحماية لمنع الموقع من الحظر<br>
                         <span style="font-size:11px; color:#ccc; font-weight:normal;">يمكنك الاستماع من السيرفر مباشرة</span>
                     </div>
-                    <button class="btn-launch" style="padding:12px 50px; font-size:16px; background:linear-gradient(45deg, #FFD700, #D4AF37); color:#000; border:none; box-shadow:0 4px 15px rgba(212,175,55,0.5); font-weight:bold; border-radius:10px; cursor:pointer; margin-bottom: 20px; margin-top: 5px;" onclick="window.open('${externalUrl}', '_blank')">اضغط هنا</button>
+                    <button class="btn-launch" style="padding:12px 50px; font-size:16px; background:linear-gradient(45deg, #FFD700, #D4AF37); color:#000; border:none; box-shadow:0 4px 15px rgba(212,175,55,0.5); font-weight:bold; border-radius:10px; cursor:pointer; margin-bottom: 20px; margin-top: 5px;" onclick="window.open('${srcUrl}', '_blank')">اضغط هنا</button>
                 </div>
             </div>`;
         return;
     }
 
-    // 1. Universal Audio Iframe Handler (Boomplay, SoundCloud, Spotify, etc.)
-    const isIframeCode = cleanUrl.toLowerCase().includes('<iframe');
-    let iframeEmbedUrl = cleanUrl;
+    // --- Definitions ---
+    const videoPlatforms = [
+        'youtube.com', 'youtu.be', 'vimeo.com', 'dailymotion.com',
+        'twitch.tv', 'facebook.com/video', 'instagram.com', 'tiktok.com',
+        'vidora.su', 'aflam4you', 'wecima', 'cima4u', 'mycima',
+        'streamtape.com', 'doodstream.com', 'vidbom.com', 'uqload.com'
+    ];
 
-    // Extract iframe URL if it's a full iframe code
-    if (isIframeCode) {
-        const match = cleanUrl.match(/src=["']([^"']+)["']/i);
-        if (match) iframeEmbedUrl = match[1];
-    }
-
-    // Detect audio streaming platforms
     const audioStreamingPlatforms = [
         'boomplay.com', 'soundcloud.com', 'spotify.com', 'mixcloud.com',
         'audiomack.com', 'anghami.com', 'deezer.com', 'tidal.com',
         'bandcamp.com', 'reverbnation.com', 'hearthis.at'
     ];
 
-    const isAudioPlatform = audioStreamingPlatforms.some(platform =>
-        iframeEmbedUrl.toLowerCase().includes(platform)
-    );
+    const isVideoPlatform = videoPlatforms.some(p => srcUrl.toLowerCase().includes(p));
+    const isAudioPlatform = audioStreamingPlatforms.some(p => srcUrl.toLowerCase().includes(p));
 
-    // Check if it's an audio iframe (forced by user OR detected platform)
-    if ((forceAudio || isAudioPlatform) && (isIframeCode || isAudioPlatform)) {
-        container.classList.add('audio-mode');
-        container.style.display = 'block';
-        container.style.background = '#000';
-        container.style.height = '0';
-
-        // Detect platform for badge
-        let platformBadge = '🎵 مشغل صوتي';
-        if (iframeEmbedUrl.includes('boomplay.com')) platformBadge = '🎵 Powered by Boomplay';
-        else if (iframeEmbedUrl.includes('soundcloud.com')) platformBadge = '🎵 Powered by SoundCloud';
-        else if (iframeEmbedUrl.includes('spotify.com')) platformBadge = '🎵 Powered by Spotify';
-        else if (iframeEmbedUrl.includes('anghami.com')) platformBadge = '🎵 Powered by Anghami';
-
-        container.innerHTML = `
-            <div class="royal-audio-hub boomplay-mode" id="audio-wrapper">
-                <div class="royal-player-card">
-                    <div class="royal-disk-section">
-                        <div class="royal-aura-glow"></div>
-                        <div class="royal-disk-container">
-                            <div class="royal-disk playing" id="audio-disk">
-                                <div class="royal-disk-center">
-                                    <div class="jewel-spark"></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="royal-visualizer">
-                            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
-                            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="royal-info-section">
-                        <h2 class="royal-track-name">${name}</h2>
-                        <span class="royal-track-category">${category}</span>
-                        <span class="boomplay-badge">${platformBadge}</span>
-                    </div>
-
-                    <div class="boomplay-iframe-container">
-                        <iframe 
-                            src="${iframeEmbedUrl}" 
-                            frameborder="0"
-                            allow="autoplay; encrypted-media"
-                            allowfullscreen
-                            style="width: 100%; height: 420px; border-radius: 15px; box-shadow: 0 0 30px rgba(0, 243, 255, 0.3);">
-                        </iframe>
-                    </div>
-                </div>
-            </div>
-        `;
-        return;
-    }
-
-    // 2. Audio Handler Priority (If forced or detected - for direct audio files)
-    const isAudioExt = cleanUrl.match(/\.(mp3|wav|aac|m4a|ogg|opus|flac)(\?.*)?$/i);
+    // Audio File Extensions detection
+    // Audio File Extensions detection
+    const isAudioExt = srcUrl.match(/\.(mp3|wav|aac|m4a|m4b|ogg|oga|opus|flac|wma|weba|mid|midi|aif|aiff|m3u|ra|ram)(\?.*)?$/i);
     const audioKeywords = ["اغاني", "موسيقى", "music", "audio", "radio", "راديو", "قرآن", "quran", "استماع", "صوت", "تلاوة", "إذاعة", "fm", "station", "بث", "صوتي", "تلاوات", "اناشيد", "أناشيد"];
     const lowerName = (name || "").toLowerCase();
     const lowerCat = (category || "").toLowerCase();
     const isAudioCat = audioKeywords.some(key => lowerCat.includes(key) || lowerName.includes(key));
 
-    if (forceAudio || isAudioExt || isAudioCat) {
-        container.classList.add('audio-mode');
-        container.style.display = 'block';
-        container.style.background = '#000';
-        container.style.height = '0';
+    // --- LOGIC: AUDIO HANDLER ---
+    // Rule: We use Audio Hub if 'Force Audio' is checked, OR it is a known Audio Platform, OR it looks like an audio file/category AND NOT a video platform.
+    if (forceAudio || isAudioPlatform || (isAudioExt && !isVideoPlatform) || (isAudioCat && !isVideoPlatform)) {
 
-        container.innerHTML = `
-            <div class="royal-audio-hub" id="audio-wrapper">
-                <div class="royal-player-card">
-                    <div class="royal-disk-section">
-                        <div class="royal-aura-glow"></div>
-                        <div class="royal-disk-container">
-                            <div class="royal-disk" id="audio-disk">
-                                <div class="royal-disk-center">
-                                    <div class="jewel-spark"></div>
+        // Force Audio override, OR not a video platform
+        if (isVideoPlatform && !forceAudio) {
+            // It's a video platform (like YouTube) and audio is NOT forced.
+            // Let it fall through to the Video Handler.
+        } else {
+            container.classList.add('audio-mode');
+            container.style.display = 'block';
+            container.style.background = '#000';
+            container.style.height = '0';
+
+            // 1. HTML Embed / Iframe Audio Mode
+            // If the user provided an HTML embed code (iframe or otherwise), OR it detects an audio platform link
+            if (isHtmlEmbed || isAudioPlatform) {
+                let platformBadge = '🎵 مشغل صوتي';
+                if (srcUrl.includes('boomplay.com')) platformBadge = '🎵 Powered by Boomplay';
+                else if (srcUrl.includes('soundcloud.com')) platformBadge = '🎵 Powered by SoundCloud';
+                else if (srcUrl.includes('spotify.com')) platformBadge = '🎵 Powered by Spotify';
+                else if (srcUrl.includes('anghami.com')) platformBadge = '🎵 Powered by Anghami';
+
+                // If it is an Embed Code, we use the RAW INPUT (the iframe itself).
+                // If it is just a URL (e.g. Boomplay Link) but not an iframe:
+                // We really should expect an Embed Code for things like Boomplay. 
+                // But if they just pasted a link, we might try to iframe it.
+                // However, most of those sites forbid direct iframing of the homepage.
+                // We assume if it's NOT html, we wrap it in an iframe.
+
+                let renderContent = rawInput;
+                if (!isHtmlEmbed) {
+                    renderContent = `<iframe src="${srcUrl}" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen style="width: 100%; height: 420px; border-radius: 15px; box-shadow: 0 0 30px rgba(0, 243, 255, 0.3);"></iframe>`;
+                } else {
+                    // It is HTML/Iframe. We need to ensure it has styling to fit.
+                    // We can't easily inject styles into a string, but we can wrap it.
+                    // We will just put it in the container.
+                }
+
+                container.innerHTML = `
+                    <div class="royal-audio-hub boomplay-mode" id="audio-wrapper">
+                        <div class="royal-player-card">
+                            <div class="royal-disk-section">
+                                <div class="royal-aura-glow"></div>
+                                <div class="royal-disk-container">
+                                    <div class="royal-disk playing" id="audio-disk">
+                                        <div class="royal-disk-center">
+                                            <div class="jewel-spark"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="royal-visualizer">
+                                    <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+                                    <div class="bar"></div><div class="bar"></div><div class="bar"></div>
                                 </div>
                             </div>
+                            
+                            <div class="royal-info-section">
+                                <h2 class="royal-track-name">${name}</h2>
+                                <span class="royal-track-category">${category}</span>
+                                <span class="boomplay-badge">${platformBadge}</span>
+                            </div>
+
+                            <div class="boomplay-iframe-container">
+                                ${renderContent}
+                            </div>
                         </div>
-                        <div class="royal-visualizer">
-                            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
-                            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+                    </div>
+                `;
+                return;
+            }
+
+            // 2. Direct Audio File Mode (MP3, M3U8 Audio, etc.)
+            container.innerHTML = `
+                <div class="royal-audio-hub" id="audio-wrapper">
+                    <div class="royal-player-card">
+                        <div class="royal-disk-section">
+                            <div class="royal-aura-glow"></div>
+                            <div class="royal-disk-container">
+                                <div class="royal-disk" id="audio-disk">
+                                    <div class="royal-disk-center">
+                                        <div class="jewel-spark"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="royal-visualizer">
+                                <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+                                <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="royal-info-section">
+                            <h2 class="royal-track-name">${name}</h2>
+                            <span class="royal-track-category">${category}</span>
+                        </div>
+
+                        <div class="royal-controls-section">
+                            <div class="royal-progress-container" id="audio-seek-bar">
+                                <div class="royal-progress-bar" id="audio-progress"></div>
+                            </div>
+                            <div class="royal-time-row">
+                                <span id="curr-time">00:00</span>
+                                <span id="total-time">00:00</span>
+                            </div>
+                            <div class="royal-main-actions">
+                                <button class="royal-play-btn" id="audio-toggle-btn">
+                                    <div class="royal-play-icon" id="audio-icon-state">▶</div>
+                                </button>
+                            </div>
+                            <div class="royal-vol-row">
+                                <span class="vol-icon">🔊</span>
+                                <input type="range" class="royal-vol-slider" id="audio-vol-control" min="0" max="1" step="0.05" value="1">
+                            </div>
                         </div>
                     </div>
                     
-                    <div class="royal-info-section">
-                        <h2 class="royal-track-name">${name}</h2>
-                        <span class="royal-track-category">${category}</span>
-                    </div>
-
-                    <div class="royal-controls-section">
-                        <div class="royal-progress-container" id="audio-seek-bar">
-                            <div class="royal-progress-bar" id="audio-progress"></div>
-                        </div>
-                        <div class="royal-time-row">
-                            <span id="curr-time">00:00</span>
-                            <span id="total-time">00:00</span>
-                        </div>
-                        <div class="royal-main-actions">
-                            <button class="royal-play-btn" id="audio-toggle-btn">
-                                <div class="royal-play-icon" id="audio-icon-state">▶</div>
-                            </button>
-                        </div>
-                        <div class="royal-vol-row">
-                            <span class="vol-icon">🔊</span>
-                            <input type="range" class="royal-vol-slider" id="audio-vol-control" min="0" max="1" step="0.05" value="1">
-                        </div>
-                    </div>
+                    <audio id="main-audio-player" autoplay>
+                        <source src="${srcUrl}" type="${isAudioExt ? 'audio/mpeg' : 'application/x-mpegURL'}">
+                    </audio>
                 </div>
-                
-                <audio id="main-audio-player" autoplay>
-                    <source src="${cleanUrl}" type="${isAudioExt ? 'audio/mpeg' : 'application/x-mpegURL'}">
-                </audio>
-            </div>
-        `;
+            `;
 
-        const player = document.getElementById('main-audio-player');
-        const wrapper = document.getElementById('audio-wrapper');
-        const toggleBtn = document.getElementById('audio-toggle-btn');
-        const iconState = document.getElementById('audio-icon-state');
-        const prog = document.getElementById('audio-progress');
-        const seekBar = document.getElementById('audio-seek-bar');
-        const currTimeEl = document.getElementById('curr-time');
-        const totalTimeEl = document.getElementById('total-time');
-        const volSlider = document.getElementById('audio-vol-control');
+            // Initialize Player Logic (Volume, Progress, HLS)
+            const player = document.getElementById('main-audio-player');
+            const wrapper = document.getElementById('audio-wrapper');
+            const toggleBtn = document.getElementById('audio-toggle-btn');
+            const iconState = document.getElementById('audio-icon-state');
+            const prog = document.getElementById('audio-progress');
+            const seekBar = document.getElementById('audio-seek-bar');
+            const currTimeEl = document.getElementById('curr-time');
+            const totalTimeEl = document.getElementById('total-time');
+            const volSlider = document.getElementById('audio-vol-control');
 
-        function formatTime(s) {
-            if (isNaN(s) || !isFinite(s)) return "00:00";
-            const m = Math.floor(s / 60);
-            const sec = Math.floor(s % 60);
-            return `${m < 10 ? '0' : ''}${m}:${sec < 10 ? '0' : ''}${sec}`;
-        }
+            function formatTime(s) {
+                if (isNaN(s) || !isFinite(s)) return "00:00";
+                const m = Math.floor(s / 60);
+                const sec = Math.floor(s % 60);
+                return `${m < 10 ? '0' : ''}${m}:${sec < 10 ? '0' : ''}${sec}`;
+            }
 
-        if (cleanUrl.includes('.m3u8') && typeof Hls !== 'undefined') {
-            if (Hls.isSupported()) {
+            if (srcUrl.includes('.m3u8') && typeof Hls !== 'undefined' && Hls.isSupported()) {
                 const hls = new Hls();
-                hls.loadSource(cleanUrl);
+                hls.loadSource(srcUrl);
                 hls.attachMedia(player);
                 hls.on(Hls.Events.MANIFEST_PARSED, () => player.play().catch(() => { }));
-            } else if (player.canPlayType('application/vnd.apple.mpegurl')) {
-                player.src = cleanUrl;
+            } else {
+                player.src = srcUrl;
             }
-        } else {
-            player.src = cleanUrl;
+
+            player.onplay = () => { wrapper.classList.add('playing'); iconState.textContent = '⏸'; };
+            player.onpause = () => { wrapper.classList.remove('playing'); iconState.textContent = '▶'; };
+            toggleBtn.onclick = () => { if (player.paused) player.play(); else player.pause(); };
+            player.ontimeupdate = () => {
+                if (player.duration) {
+                    const p = (player.currentTime / player.duration) * 100;
+                    prog.style.width = p + '%';
+                }
+                currTimeEl.textContent = formatTime(player.currentTime);
+            };
+            player.onloadedmetadata = () => { totalTimeEl.textContent = formatTime(player.duration); };
+            seekBar.onclick = (e) => {
+                const rect = seekBar.getBoundingClientRect();
+                const pos = (e.clientX - rect.left) / rect.width;
+                if (player.duration) player.currentTime = pos * player.duration;
+            };
+            volSlider.oninput = (e) => { player.volume = e.target.value; };
+            player.play().catch(() => { console.log("Autoplay prevented"); });
+
+            return;
         }
-
-        player.onplay = () => {
-            wrapper.classList.add('playing');
-            iconState.textContent = '⏸';
-        };
-
-        player.onpause = () => {
-            wrapper.classList.remove('playing');
-            iconState.textContent = '▶';
-        };
-
-        toggleBtn.onclick = () => {
-            if (player.paused) player.play();
-            else player.pause();
-        };
-
-        player.ontimeupdate = () => {
-            if (player.duration) {
-                const p = (player.currentTime / player.duration) * 100;
-                prog.style.width = p + '%';
-            }
-            currTimeEl.textContent = formatTime(player.currentTime);
-        };
-
-        player.onloadedmetadata = () => {
-            totalTimeEl.textContent = formatTime(player.duration);
-        };
-
-        seekBar.onclick = (e) => {
-            const rect = seekBar.getBoundingClientRect();
-            const pos = (e.clientX - rect.left) / rect.width;
-            if (player.duration) player.currentTime = pos * player.duration;
-        };
-
-        volSlider.oninput = (e) => {
-            player.volume = e.target.value;
-        };
-
-        player.play().catch(() => {
-            console.log("Autoplay prevented, waiting for user interaction");
-        });
-
-        return;
     }
 
-    // 2. YouTube Handler
-    const ytId = getYouTubeId(cleanUrl);
+    // --- LOGIC: VIDEO HANDLER ---
+
+    // 1. YouTube
+    // We try to grab the ID from the srcUrl (which comes from iframe src OR raw line)
+    const ytId = getYouTubeId(srcUrl);
     if (ytId) {
         container.innerHTML = `
             <iframe 
@@ -601,29 +607,39 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
         return;
     }
 
-    // 3. Vidora & Movie Site Handler
-    if (cleanUrl.includes('vidora.su')) {
+    // 2. Vidora (Special handling: URL -> Iframe, Iframe Code -> Iframe Code)
+    if (srcUrl.includes('vidora.su')) {
         container.classList.add('iframe-mode');
-        container.innerHTML = `
-            <iframe 
-                src="${cleanUrl}" 
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                allowfullscreen 
-                style="width: 100%; height: 100%; border: none;">
-            </iframe>`;
-        return;
+        if (isHtmlEmbed) {
+            // It was already an iframe code, render specific or allow fallthrough
+            // Fallthrough to Generic Iframe logic below is safest for raw codes
+        } else {
+            // It's a plain URL, wrap it
+            container.innerHTML = `
+                <iframe 
+                    src="${srcUrl}" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                    allowfullscreen 
+                    style="width: 100%; height: 100%; border: none;">
+                </iframe>`;
+            return;
+        }
     }
 
-    // 4. Generic Iframe Handler
-    if (cleanUrl.toLowerCase().startsWith('<iframe')) {
+    // 3. Generic HTML / Iframe Handler (The User pasted an Embed Code)
+    // We do this check AFTER specialized formatters like Youtube/Vidora-URL, but BEFORE Generic Video.
+    // If it is Vidora Embed Code, it falls here and gets rendered raw.
+    if (isHtmlEmbed) {
         container.classList.add('iframe-mode');
-        container.innerHTML = cleanUrl;
+        container.innerHTML = rawInput; // Use the raw input
+
+        // Try to force full size on any iframes found
         const ifr = container.querySelector('iframe');
         if (ifr) { ifr.style.width = '100%'; ifr.style.height = '100%'; ifr.style.border = 'none'; }
         return;
     }
 
-    // 4. Standard Video/M3U8 Handler (Added better error handling for Movies)
+    // 4. Standard Video/M3U8 Player
     const media = document.createElement('video');
     media.controls = true;
     media.autoplay = true;
@@ -631,7 +647,6 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
     media.style.height = '100%';
     media.style.backgroundColor = '#000';
 
-    // Inject Arabic Subtitles if available
     if (subtitleUrl) {
         const track = document.createElement('track');
         track.kind = 'subtitles';
@@ -642,7 +657,6 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
         media.appendChild(track);
     }
 
-    // Add event listeners for errors (Fix for Foreign Movies)
     media.onerror = () => {
         console.error("Video Error Detected. Redirecting to protection mode...");
         container.innerHTML = `
@@ -654,19 +668,16 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
                         تم تفعيل نظام الحماية لمنع الموقع من الحظر<br>
                         <span style="font-size:10px; color:#ccc; font-weight:normal;">يمكنك الاستماع من السيرفر مباشرة</span>
                     </div>
-                    <button class="btn-launch" style="padding:10px 40px; font-size:15px; background:linear-gradient(45deg, #FFD700, #D4AF37); color:#000; border:none; box-shadow:0 4px 12px rgba(212,175,55,0.4); font-weight:bold; border-radius:8px; cursor:pointer; margin-bottom: 15px; margin-top: 5px;" onclick="window.open('${externalUrl}', '_blank')">اضغط هنا</button>
+                    <button class="btn-launch" style="padding:10px 40px; font-size:15px; background:linear-gradient(45deg, #FFD700, #D4AF37); color:#000; border:none; box-shadow:0 4px 12px rgba(212,175,55,0.4); font-weight:bold; border-radius:8px; cursor:pointer; margin-bottom: 15px; margin-top: 5px;" onclick="window.open('${srcUrl}', '_blank')">اضغط هنا</button>
                 </div>
             </div>`;
     };
 
-    // Reset container styles for video
     container.style.display = 'block';
     container.style.background = '#111';
-
     container.innerHTML = '';
     container.appendChild(media);
 
-    // Intelligent Auto-Subtitle Selection Logic
     media.addEventListener('loadedmetadata', () => {
         const tracks = media.textTracks;
         for (let i = 0; i < tracks.length; i++) {
@@ -677,38 +688,31 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
         }
     });
 
-    if (cleanUrl.includes('.m3u8') && typeof Hls !== 'undefined') {
+    if (srcUrl.includes('.m3u8') && typeof Hls !== 'undefined') {
         if (Hls.isSupported()) {
-            const hls = new Hls({
-                autoStartLoad: true,
-                startFragPrefetch: true,
-                enableSubtitle: true // Force subtitles in HLS
-            });
-            hls.loadSource(cleanUrl);
+            const hls = new Hls({ autoStartLoad: true, startFragPrefetch: true, enableSubtitle: true });
+            hls.loadSource(srcUrl);
             hls.attachMedia(media);
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                // Try to find Arabic subtitle track in HLS manifest
                 const subTracks = hls.subtitleTracks;
                 const arIndex = subTracks.findIndex(t => t.lang.startsWith('ar') || t.name.toLowerCase().includes('arabic'));
                 if (arIndex !== -1) hls.subtitleTrack = arIndex;
             });
-            hls.on(Hls.Events.ERROR, function (event, data) {
-                if (data.fatal) { media.src = cleanUrl; }
-            });
+            hls.on(Hls.Events.ERROR, function (event, data) { if (data.fatal) { media.src = srcUrl; } });
         } else if (media.canPlayType('application/vnd.apple.mpegurl')) {
-            media.src = cleanUrl;
+            media.src = srcUrl;
         }
-    } else if ((cleanUrl.includes('.ts') || cleanUrl.includes('.flv')) && typeof mpegts !== 'undefined') {
+    } else if ((srcUrl.includes('.ts') || srcUrl.includes('.flv')) && typeof mpegts !== 'undefined') {
         if (mpegts.getFeatureList().mseLivePlayback) {
-            const player = mpegts.createPlayer({ type: cleanUrl.includes('.flv') ? 'flv' : 'mse', url: cleanUrl });
+            const player = mpegts.createPlayer({ type: srcUrl.includes('.flv') ? 'flv' : 'mse', url: srcUrl });
             player.attachMediaElement(media);
             player.load();
             player.play();
         } else {
-            media.src = cleanUrl;
+            media.src = srcUrl;
         }
     } else {
-        media.src = cleanUrl;
+        media.src = srcUrl;
     }
 }
 

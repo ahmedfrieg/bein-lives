@@ -2228,32 +2228,68 @@ body {
     .royal-audio-hub.boomplay-mode {
         padding: 20px 10px;
     }
-    
+
     .royal-audio-hub.boomplay-mode .royal-player-card {
         padding: 20px 15px;
         max-width: 100%;
     }
-    
+
     .royal-audio-hub.boomplay-mode .royal-disk-section {
         width: 100px;
         height: 100px;
         margin-bottom: 15px;
     }
-    
+
     .royal-track-name {
         font-size: 0.9rem !important;
     }
-    
+
     .royal-track-category {
         font-size: 0.65rem !important;
     }
-    
+
     .boomplay-badge {
         font-size: 0.6rem;
         padding: 4px 12px;
     }
-    
+
     .boomplay-iframe-container iframe {
         min-height: 360px;
+    }
+}
+
+/* --- Desktop Audio Mode Fixes --- */
+@media (min-width: 769px) {
+    .video-container.audio-mode {
+        padding-bottom: 0 !important;
+        height: auto !important;
+        min-height: 600px;
+        /* Generous height for audio card */
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at center, #111, #000);
+    }
+
+    /* Ensure the hub flows within the flexible container */
+    .video-container.audio-mode .royal-audio-hub {
+        position: relative !important;
+        height: auto !important;
+        width: 100%;
+        background: transparent !important;
+        /* Let container bg show */
+    }
+
+    /* Adjust Card size for desktop flow */
+    .video-container.audio-mode .royal-player-card {
+        margin: 40px auto;
+        max-width: 400px;
+        /* Constrain width */
+    }
+
+    /* Boomplay Mode Desktop adjustments */
+    .video-container.audio-mode .royal-audio-hub.boomplay-mode .royal-player-card {
+        max-width: 700px;
+        /* Wider for iframe content */
     }
 }
