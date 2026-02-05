@@ -180,10 +180,11 @@ header {
     backdrop-filter: blur(10px);
 }
 
+/* Clean Video Container */
 .video-container {
     position: relative;
     padding-bottom: 56.25%;
-    /* 16:9 */
+    /* Responsive 16:9 */
     height: 0;
     overflow: hidden;
     border-radius: 10px;
@@ -200,10 +201,17 @@ header {
     width: 100%;
     height: 100%;
     border: none;
+}
+
+/* Centered Placeholder */
+.video-container .placeholder-text {
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
+    height: 100%;
+    text-align: center;
+    color: var(--secondary-color);
 }
 
 .video-container .centered-image {

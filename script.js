@@ -359,7 +359,11 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
     srcUrl = srcUrl.trim();
 
     container.classList.remove('iframe-mode');
-    container.style.paddingBottom = ''; // Reset to default 16:9 from CSS
+    // Set a stable default ratio 
+    container.style.paddingBottom = "56.25%";
+    container.style.height = "0";
+    container.style.maxWidth = "100%";
+    container.style.margin = "0";
 
     // Restore original title format with an external button
     // If we couldn't extract a srcUrl (e.g. raw html with no link), open btn might break, but that's edge case.
@@ -594,72 +598,8 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
 
     // --- LOGIC: VIDEO HANDLER ---
 
-    // 0. Facebook Handler (Balanced & Resilient)
-    if (srcUrl.includes('facebook.com') || srcUrl.includes('fb.watch') || srcUrl.includes('fb.com')) {
-        // CASE 1: If the user provided a full IFRAME/HTML code (Preserve tokens)
-        if (isHtmlEmbed) {
-            container.classList.add('iframe-mode');
-            container.innerHTML = rawInput;
 
-            const ifr = container.querySelector('iframe');
-            if (ifr) {
-                // Detect Natural Aspect Ratio from User's Embed Code
-                const w = ifr.getAttribute('width');
-                const h = ifr.getAttribute('height');
-                if (w && h) {
-                    const ratio = (parseInt(h) / parseInt(w)) * 100;
-                    if (!isNaN(ratio)) container.style.paddingBottom = ratio + "%";
-                }
 
-                ifr.style.width = "100%";
-                ifr.style.height = "100%";
-                ifr.style.border = "none";
-                ifr.setAttribute('allowfullscreen', 'true');
-                ifr.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
-                ifr.setAttribute('allow', 'autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share');
-                ifr.removeAttribute('width');
-                ifr.removeAttribute('height');
-            }
-            return;
-        }
-
-        // CASE 2: If the user provided a plain LINK (URL)
-        let finalUrl = srcUrl;
-
-        try {
-            // Convert mobile links for better plugin support
-            if (finalUrl.includes('m.facebook.com')) finalUrl = finalUrl.replace('m.facebook.com', 'www.facebook.com');
-
-            // Extract the numeric ID - the most stable way to embed
-            const idMatch = finalUrl.match(/(?:videos\/|reel\/|watch\/|v=|fbid=|\/v\/|watch\/\?v=)(\d{10,})/) || finalUrl.match(/\/(\d{10,})(\/|\?|$)/);
-            if (idMatch && idMatch[1]) {
-                finalUrl = `https://www.facebook.com/watch/?v=${idMatch[1]}`;
-            }
-
-            // Detect if it's a Reel to set vertical aspect ratio
-            if (srcUrl.toLowerCase().includes('/reel/') || srcUrl.toLowerCase().includes('/reels/')) {
-                container.style.paddingBottom = "177.77%"; // 9:16
-            }
-        } catch (e) { console.error("FB Rebuild error:", e); }
-
-        const encoded = encodeURIComponent(finalUrl);
-        container.classList.add('iframe-mode');
-        container.innerHTML = `
-            <iframe 
-                src="https://www.facebook.com/plugins/video.php?href=${encoded}&show_text=0&t=0&adapt_container_width=true"
-                width="100%" 
-                height="100%" 
-                style="border:none;overflow:hidden;" 
-                scrolling="no" 
-                frameborder="0" 
-                allowfullscreen="true" 
-                referrerpolicy="no-referrer-when-downgrade"
-                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share">
-            </iframe>`;
-        return;
-    }
-
-    // 1. YouTube
     // We try to grab the ID from the srcUrl (which comes from iframe src OR raw line)
     const ytId = getYouTubeId(srcUrl);
     if (ytId) {
@@ -673,14 +613,35 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
         return;
     }
 
-    // 2. Vidora (Special handling: URL -> Iframe, Iframe Code -> Iframe Code)
+    // 2. Facebook Handler (URL or Embed Code -> Optimized Iframe)
+    if (srcUrl.includes('facebook.com') || srcUrl.includes('fb.watch')) {
+        container.classList.add('iframe-mode');
+        let fbUrl = srcUrl;
+        if (!srcUrl.includes('facebook.com/plugins/video.php')) {
+            fbUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(srcUrl)}&show_text=0&width=560&autoplay=1`;
+        }
+
+        // Use a standard responsive iframe without allowfullscreen to satisfy user request
+        container.innerHTML = `
+            <iframe 
+                src="${fbUrl}" 
+                style="width: 100%; height: 100%; border: none; overflow: hidden;"
+                scrolling="no" 
+                frameborder="0" 
+                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                webkit-playsinline
+                playsinline>
+            </iframe>`;
+        return;
+    }
+
+    // 3. Vidora (Special handling: URL -> Iframe, Iframe Code -> Iframe Code)
     if (srcUrl.includes('vidora.su')) {
         container.classList.add('iframe-mode');
-        if (isHtmlEmbed) {
-            // It was already an iframe code, render specific or allow fallthrough
-            // Fallthrough to Generic Iframe logic below is safest for raw codes
+        if (isHtmlEmbed && !srcUrl.includes('facebook.com')) {
+            // allow fallthrough to Generic Iframe logic below
         } else {
-            // It's a plain URL, wrap it
+            // It's a plain URL or needs wrapping
             container.innerHTML = `
                 <iframe 
                     src="${srcUrl}" 
@@ -692,12 +653,20 @@ function playStream(url, name, forceProtection, category, forceAudio = false, su
         }
     }
 
-    // 3. Generic HTML / Iframe Handler (The User pasted an Embed Code)
-    // We do this check AFTER specialized formatters like Youtube/Vidora-URL, but BEFORE Generic Video.
-    // If it is Vidora Embed Code, it falls here and gets rendered raw.
+    // 4. Generic HTML / Iframe Handler (The User pasted an Embed Code)
     if (isHtmlEmbed) {
         container.classList.add('iframe-mode');
-        container.innerHTML = rawInput; // Use the raw input
+        let processedContent = rawInput;
+
+        // Extra precaution for Facebook even in generic embeds
+        if (rawInput.includes('facebook.com')) {
+            processedContent = rawInput.replace(/allowfullscreen(="true")?/gi, '');
+            if (processedContent.includes('<iframe')) {
+                processedContent = processedContent.replace('<iframe', '<iframe webkit-playsinline playsinline');
+            }
+        }
+
+        container.innerHTML = processedContent;
 
         // Try to force full size on any iframes found
         const ifr = container.querySelector('iframe');
