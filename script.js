@@ -727,12 +727,52 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof firebase !== 'undefined') {
         firebase.auth().onAuthStateChanged(user => {
             const loginModal = document.getElementById('login-modal');
+            const logoutBtn = document.getElementById('logout-btn');
             if (user) {
                 if (loginModal) loginModal.style.display = 'none';
+                if (logoutBtn) logoutBtn.style.display = 'block';
                 refreshUI();
             } else {
                 if (loginModal) loginModal.style.display = 'flex';
+                if (logoutBtn) logoutBtn.style.display = 'none';
             }
         });
+
+        const loginBtn = document.getElementById('login-btn');
+        if (loginBtn) {
+            const doLogin = () => {
+                const email = document.getElementById('admin-user').value.trim();
+                const pass = document.getElementById('admin-pass').value.trim();
+                if (email && pass) {
+                    showToast("جاري تسجيل الدخول...");
+                    firebase.auth().signInWithEmailAndPassword(email, pass)
+                        .catch(err => {
+                            console.error(err);
+                            // رسالة عربية سهلة للمستخدم بدلاً من أخطاء النظام التقنية
+                            if (err.code === 'auth/user-not-found' ||
+                                err.code === 'auth/wrong-password' ||
+                                err.code === 'auth/invalid-email' ||
+                                err.code === 'auth/invalid-login-credentials') {
+                                showToast("❌ عذراً، خطأ في البريد الإلكتروني أو كلمة المرور", true);
+                            } else {
+                                showToast("❌ حدث خطأ أثناء تسجيل الدخول، يرجى المحاولة لاحقاً", true);
+                            }
+                        });
+                } else {
+                    showToast("يرجى إدخال البريد الإلكتروني وكلمة المرور", true);
+                }
+            };
+            loginBtn.onclick = doLogin;
+
+            // Allow login on Enter key
+            const inputs = [document.getElementById('admin-user'), document.getElementById('admin-pass')];
+            inputs.forEach(input => {
+                if (input) {
+                    input.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') doLogin();
+                    });
+                }
+            });
+        }
     }
 });

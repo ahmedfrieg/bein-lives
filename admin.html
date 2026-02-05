@@ -33,7 +33,10 @@
     <header>
         <div class="logo-text" style="font-size: 1.8rem;">Control Panel</div>
         <div class="subtitle">Management System</div>
-        <a href="index.html" class="btn btn-primary btn-back">العودة للموقع</a>
+        <div style="display: flex; gap: 10px;">
+            <button onclick="firebase.auth().signOut()" class="btn btn-danger" id="logout-btn" style="display: none;">تسجيل خروج</button>
+            <a href="index.html" class="btn btn-primary btn-back">العودة للموقع</a>
+        </div>
     </header>
 
     <div class="container">
